@@ -1,0 +1,10 @@
+.gradle/
+build/
+out/
+*.class
+.idea/
+*.iml
+.vscode/
+.env
+*.log
+firebase-service-account.json
