@@ -1,0 +1,31 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: notification-platform
+  namespace: notification-platform
+  labels:
+    app: notification-platform
+spec:
+  type: ClusterIP
+  selector:
+    app: notification-platform
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8080
+---
+# Headless service used by clients that need direct pod addressing (not required for the
+# stateless REST API, included for completeness / WebSocket sticky-routing experiments).
+apiVersion: v1
+kind: Service
+metadata:
+  name: notification-platform-headless
+  namespace: notification-platform
+spec:
+  clusterIP: None
+  selector:
+    app: notification-platform
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080

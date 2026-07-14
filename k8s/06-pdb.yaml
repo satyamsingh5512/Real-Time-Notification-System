@@ -1,0 +1,10 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: notification-platform-pdb
+  namespace: notification-platform
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: notification-platform
