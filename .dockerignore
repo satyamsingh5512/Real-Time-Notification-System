@@ -1,0 +1,11 @@
+build/
+.gradle/
+*.iml
+.idea/
+out/
+.git/
+.github/
+k8s/
+docs/
+load-testing/
+*.md
