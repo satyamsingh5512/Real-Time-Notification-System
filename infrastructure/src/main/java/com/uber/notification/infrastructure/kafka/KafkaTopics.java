@@ -24,6 +24,14 @@ public final class KafkaTopics {
     /** A notification whose delivery failed transiently and should be retried after a delay. */
     public static final String NOTIFICATION_RETRY = "notification.retry";
 
+    /** Time-bucketed retry topics for high-throughput non-blocking delays. */
+    public static final String NOTIFICATION_RETRY_30S = "notification.retry-30s";
+    public static final String NOTIFICATION_RETRY_5M = "notification.retry-5m";
+    public static final String NOTIFICATION_RETRY_30M = "notification.retry-30m";
+
+    /** Malformed inbound event payloads (poison pills) quarantined for inspection. */
+    public static final String EVENTS_POISON_PILL = "events.poison-pill";
+
     /** A notification that exhausted all retry attempts or failed permanently. */
     public static final String NOTIFICATION_DLQ = "notification.dlq";
 
