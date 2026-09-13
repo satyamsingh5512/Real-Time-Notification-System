@@ -15,4 +15,9 @@ public interface UserRepository {
     boolean existsByEmail(String email);
 
     User save(User user);
+
+    long count();
+
+    /** Paged user-ID scan used by admin broadcast (avoids loading full rows). */
+    java.util.List<UUID> findAllIds(int page, int size);
 }
