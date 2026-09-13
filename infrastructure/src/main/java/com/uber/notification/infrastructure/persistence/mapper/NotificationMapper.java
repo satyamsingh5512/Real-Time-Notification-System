@@ -12,9 +12,9 @@ public final class NotificationMapper {
         return new NotificationJpaEntity(
                 n.getId(), n.getUserId(), n.getEventType(), n.getChannel(), n.getTemplateCode(),
                 n.getPayload(), n.getRenderedSubject(), n.getRenderedBody(), n.getStatus(),
-                n.getAttemptCount(), n.getMaxAttempts(), n.getLastErrorMessage(), n.getScheduledFor(),
-                n.getSentAt(), n.getReadAt(), n.isDeleted(), n.getCreatedAt(), n.getUpdatedAt(),
-                n.getIdempotencyKey()
+                n.getPriority(), n.getAttemptCount(), n.getMaxAttempts(), n.getLastErrorMessage(),
+                n.getScheduledFor(), n.getSentAt(), n.getReadAt(), n.isDeleted(), n.getCreatedAt(),
+                n.getUpdatedAt(), n.getIdempotencyKey()
         );
     }
 
@@ -22,9 +22,9 @@ public final class NotificationMapper {
         return Notification.restore(
                 e.getId(), e.getUserId(), e.getEventType(), e.getChannel(), e.getTemplateCode(),
                 e.getPayload(), e.getRenderedSubject(), e.getRenderedBody(), e.getStatus(),
-                e.getAttemptCount(), e.getMaxAttempts(), e.getLastErrorMessage(), e.getScheduledFor(),
-                e.getSentAt(), e.getReadAt(), e.isDeleted(), e.getCreatedAt(), e.getUpdatedAt(),
-                e.getIdempotencyKey()
+                e.getPriority(), e.getAttemptCount(), e.getMaxAttempts(), e.getLastErrorMessage(),
+                e.getScheduledFor(), e.getSentAt(), e.getReadAt(), e.isDeleted(), e.getCreatedAt(),
+                e.getUpdatedAt(), e.getIdempotencyKey()
         );
     }
 }
