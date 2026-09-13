@@ -14,6 +14,7 @@ public record NotificationResponse(
         String subject,
         String body,
         NotificationStatus status,
+        String priority,
         boolean read,
         Instant createdAt,
         Instant sentAt
@@ -22,6 +23,7 @@ public record NotificationResponse(
         return new NotificationResponse(
                 n.getId(), n.getEventType().name(), n.getChannel(),
                 n.getRenderedSubject(), n.getRenderedBody(), n.getStatus(),
+                n.getPriority() == null ? "MEDIUM" : n.getPriority().name(),
                 n.isRead(), n.getCreatedAt(), n.getSentAt()
         );
     }
