@@ -27,6 +27,13 @@ public class NotificationHistoryUseCase {
         return notificationRepository.findHistoryForUser(userId, includeDeleted, page, size);
     }
 
+    public List<Notification> getHistory(UUID userId, boolean includeDeleted,
+                                         com.uber.notification.domain.model.EventType eventType,
+                                         Instant since, Instant before, int page, int size) {
+        return notificationRepository.findHistoryForUser(
+                userId, includeDeleted, eventType, since, before, page, size);
+    }
+
     public long getUnreadCount(UUID userId) {
         return notificationRepository.countUnread(userId);
     }
@@ -47,6 +54,10 @@ public class NotificationHistoryUseCase {
         Notification notification = getOwned(notificationId, requestingUserId);
         notification.softDelete();
         notificationRepository.save(notification);
+    }
+
+    public int markAllRead(UUID userId) {
+        return notificationRepository.markAllRead(userId);
     }
 
     public List<Notification> findDueForDelivery(int limit) {
