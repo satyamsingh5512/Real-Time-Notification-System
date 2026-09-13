@@ -13,6 +13,7 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-websocket")
     implementation("org.springframework.boot:spring-boot-starter-actuator")
     implementation("org.springframework.boot:spring-boot-starter-validation")
+    implementation("org.springframework.boot:spring-boot-starter-data-jpa")
     implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:2.6.0")
 
     implementation("io.jsonwebtoken:jjwt-api:0.12.6")
@@ -23,9 +24,17 @@ dependencies {
 
     testImplementation("org.springframework.boot:spring-boot-starter-test")
     testImplementation("org.springframework.security:spring-security-test")
-    testImplementation("org.testcontainers:junit-jupiter:1.20.2")
-    testImplementation("org.testcontainers:postgresql:1.20.2")
-    testImplementation("org.testcontainers:kafka:1.20.2")
+    testImplementation("org.testcontainers:junit-jupiter:1.21.3")
+    testImplementation("org.testcontainers:postgresql:1.21.3")
+    testImplementation("org.testcontainers:kafka:1.21.3")
+    // Test-slice (@WebMvcTest) support: the app's broad @ComponentScan pulls infrastructure
+    // adapters into the slice context, so their leaf beans must be mockable here.
+    testImplementation("org.springframework.kafka:spring-kafka")
+    testImplementation("org.springframework.boot:spring-boot-starter-data-redis")
+    testImplementation("org.springframework.integration:spring-integration-redis:6.3.4")
+    testImplementation("com.google.firebase:firebase-admin:9.4.1")
+    testImplementation(platform("software.amazon.awssdk:bom:2.28.11"))
+    testImplementation("software.amazon.awssdk:ses")
 }
 
 tasks.named<org.springframework.boot.gradle.tasks.bundling.BootJar>("bootJar") {
