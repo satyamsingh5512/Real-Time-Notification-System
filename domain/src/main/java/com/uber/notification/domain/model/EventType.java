@@ -9,5 +9,7 @@ public enum EventType {
     LIKE_RECEIVED,
     MENTIONED,
     PASSWORD_RESET,
-    OTP_GENERATED
+    OTP_GENERATED,
+    /** Admin announcements pushed directly (bypass Kafka event topics). */
+    BROADCAST_ANNOUNCEMENT
 }
