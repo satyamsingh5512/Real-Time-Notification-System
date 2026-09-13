@@ -1,0 +1,55 @@
+/* DESIGN.md — "Notion Analysis" tokens as CSS custom properties.
+   Warm paper canvas, near-black Inter type, single Notion-blue accent,
+   decorative sticker palette (illustration/icon use only). */
+:root {
+  --nt-primary: #0075de;
+  --nt-primary-active: #005bab;
+  --nt-secondary: #213183;
+  --nt-on-primary: #ffffff;
+  --nt-canvas: #ffffff;
+  --nt-canvas-soft: #f6f5f4;
+  --nt-surface: #ffffff;
+  --nt-ink: #000000;
+  --nt-ink-secondary: #31302e;
+  --nt-ink-muted: #615d59;
+  --nt-ink-faint: #a39e98;
+  --nt-hairline: #e6e6e6;
+  --nt-input-border: #dddddd;
+  --nt-sky: #62aef0;
+  --nt-purple: #d6b6f6;
+  --nt-purple-deep: #391c57;
+  --nt-pink: #ff64c8;
+  --nt-orange: #dd5b00;
+  --nt-orange-deep: #793400;
+  --nt-teal: #2a9d99;
+  --nt-green: #1aae39;
+  --nt-brown: #523410;
+
+  --nt-r-xs: 4px;
+  --nt-r-sm: 5px;
+  --nt-r-md: 8px;
+  --nt-r-lg: 12px;
+  --nt-r-xl: 16px;
+  --nt-r-full: 9999px;
+
+  --nt-xxs: 4px;
+  --nt-xs: 8px;
+  --nt-sm: 12px;
+  --nt-md: 16px;
+  --nt-lg: 24px;
+  --nt-xl: 28px;
+  --nt-xxl: 32px;
+
+  --nt-shadow-1:
+    rgba(0, 0, 0, 0.01) 0 0.175px 1.041px,
+    rgba(0, 0, 0, 0.02) 0 0.8px 2.925px,
+    rgba(0, 0, 0, 0.027) 0 2.025px 7.847px,
+    rgba(0, 0, 0, 0.04) 0 4px 18px;
+  --nt-shadow-2:
+    rgba(0, 0, 0, 0.01) 0 0.175px 1.041px,
+    rgba(0, 0, 0, 0.02) 0 0.8px 2.925px,
+    rgba(0, 0, 0, 0.05) 0 23px 52px;
+
+  --nt-font: "Inter", "NotionInter", -apple-system, system-ui, "Segoe UI", Helvetica, Arial, sans-serif;
+  --nt-container: 1200px;
+}
