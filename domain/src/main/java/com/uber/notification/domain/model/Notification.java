@@ -20,6 +20,7 @@ public class Notification {
     private String renderedSubject;
     private String renderedBody;
     private NotificationStatus status;
+    private NotificationPriority priority = NotificationPriority.MEDIUM;
     private int attemptCount;
     private final int maxAttempts;
     private String lastErrorMessage;
@@ -54,6 +55,7 @@ public class Notification {
     public static Notification restore(UUID id, UUID userId, EventType eventType, NotificationChannel channel,
                                         String templateCode, Map<String, String> payload,
                                         String renderedSubject, String renderedBody, NotificationStatus status,
+                                        NotificationPriority priority,
                                         int attemptCount, int maxAttempts, String lastErrorMessage,
                                         Instant scheduledFor, Instant sentAt, Instant readAt, boolean deleted,
                                         Instant createdAt, Instant updatedAt, String idempotencyKey) {
@@ -62,6 +64,7 @@ public class Notification {
         n.renderedSubject = renderedSubject;
         n.renderedBody = renderedBody;
         n.status = status;
+        n.priority = priority == null ? NotificationPriority.MEDIUM : priority;
         n.attemptCount = attemptCount;
         n.lastErrorMessage = lastErrorMessage;
         n.sentAt = sentAt;
@@ -69,6 +72,18 @@ public class Notification {
         n.deleted = deleted;
         n.updatedAt = updatedAt;
         return n;
+    }
+
+    /** Backwards-compatible restore defaulting priority to MEDIUM. */
+    public static Notification restore(UUID id, UUID userId, EventType eventType, NotificationChannel channel,
+                                        String templateCode, Map<String, String> payload,
+                                        String renderedSubject, String renderedBody, NotificationStatus status,
+                                        int attemptCount, int maxAttempts, String lastErrorMessage,
+                                        Instant scheduledFor, Instant sentAt, Instant readAt, boolean deleted,
+                                        Instant createdAt, Instant updatedAt, String idempotencyKey) {
+        return restore(id, userId, eventType, channel, templateCode, payload, renderedSubject,
+                renderedBody, status, NotificationPriority.MEDIUM, attemptCount, maxAttempts,
+                lastErrorMessage, scheduledFor, sentAt, readAt, deleted, createdAt, updatedAt, idempotencyKey);
     }
 
     public boolean isDueForDelivery(Instant now) {
@@ -210,5 +225,14 @@ public class Notification {
 
     public String getIdempotencyKey() {
         return idempotencyKey;
+    }
+
+    public NotificationPriority getPriority() {
+        return priority;
+    }
+
+    public void setPriority(NotificationPriority priority) {
+        this.priority = priority == null ? NotificationPriority.MEDIUM : priority;
+        this.updatedAt = Instant.now();
     }
 }
