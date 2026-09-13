@@ -24,7 +24,8 @@ public final class EventChannelRouting {
             LIKE_RECEIVED, List.of(IN_APP, WEBSOCKET),
             MENTIONED, List.of(PUSH, IN_APP, WEBSOCKET),
             PASSWORD_RESET, List.of(EMAIL, SMS),
-            OTP_GENERATED, List.of(SMS, EMAIL)
+            OTP_GENERATED, List.of(SMS, EMAIL),
+            BROADCAST_ANNOUNCEMENT, List.of(IN_APP, WEBSOCKET)
     );
 
     private EventChannelRouting() {
