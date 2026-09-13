@@ -1,5 +1,6 @@
 package com.uber.notification.application.usecase;
 
+import com.uber.notification.application.port.DeliveryMetricsPort;
 import com.uber.notification.application.port.RecipientResolverPort;
 import com.uber.notification.application.port.RetryPublisherPort;
 import com.uber.notification.application.provider.NotificationProvider;
@@ -35,23 +36,36 @@ public class DeliverNotificationUseCase {
     private final NotificationProviderRegistry providerRegistry;
     private final RecipientResolverPort recipientResolver;
     private final RetryPublisherPort retryPublisher;
+    private final DeliveryMetricsPort deliveryMetrics;
 
     public DeliverNotificationUseCase(NotificationRepository notificationRepository,
                                        NotificationTemplateRepository templateRepository,
                                        NotificationProviderRegistry providerRegistry,
                                        RecipientResolverPort recipientResolver,
                                        RetryPublisherPort retryPublisher) {
+        this(notificationRepository, templateRepository, providerRegistry, recipientResolver,
+                retryPublisher, DeliveryMetricsPort.NOOP);
+    }
+
+    public DeliverNotificationUseCase(NotificationRepository notificationRepository,
+                                       NotificationTemplateRepository templateRepository,
+                                       NotificationProviderRegistry providerRegistry,
+                                       RecipientResolverPort recipientResolver,
+                                       RetryPublisherPort retryPublisher,
+                                       DeliveryMetricsPort deliveryMetrics) {
         this.notificationRepository = notificationRepository;
         this.templateRepository = templateRepository;
         this.providerRegistry = providerRegistry;
         this.recipientResolver = recipientResolver;
         this.retryPublisher = retryPublisher;
+        this.deliveryMetrics = deliveryMetrics == null ? DeliveryMetricsPort.NOOP : deliveryMetrics;
     }
 
     public void execute(Notification notification) {
         notification.markProcessing();
         notificationRepository.save(notification);
 
+        long startNanos = System.nanoTime();
         try {
             renderTemplate(notification);
             ProviderRecipient recipient = recipientResolver.resolve(notification.getUserId());
@@ -63,9 +77,17 @@ public class DeliverNotificationUseCase {
 
             notification.markSent();
             notificationRepository.save(notification);
+            deliveryMetrics.recordDeliveryLatency(notification.getChannel().name(),
+                    Duration.ofNanos(System.nanoTime() - startNanos));
+            deliveryMetrics.onDispatched(notification.getChannel().name(),
+                    notification.getEventType().name(), "SUCCESS");
         } catch (NotificationDeliveryException e) {
+            deliveryMetrics.recordDeliveryLatency(notification.getChannel().name(),
+                    Duration.ofNanos(System.nanoTime() - startNanos));
             handleFailure(notification, e.getMessage(), e.isRetryable());
         } catch (Exception e) {
+            deliveryMetrics.recordDeliveryLatency(notification.getChannel().name(),
+                    Duration.ofNanos(System.nanoTime() - startNanos));
             handleFailure(notification, e.getMessage(), true);
         }
     }
@@ -93,9 +115,13 @@ public class DeliverNotificationUseCase {
         if (notification.getStatus() == com.uber.notification.domain.model.NotificationStatus.RETRYING) {
             Duration delay = BackoffCalculator.computeDelay(notification.getAttemptCount(), BASE_BACKOFF, MAX_BACKOFF);
             retryPublisher.publishForRetry(notification, delay);
+            deliveryMetrics.onDispatched(notification.getChannel().name(),
+                    notification.getEventType().name(), "RETRY");
         } else {
             retryPublisher.publishToDeadLetter(notification,
                     retryable ? "Max attempts exhausted" : "Permanent failure: " + errorMessage);
+            deliveryMetrics.onDispatched(notification.getChannel().name(),
+                    notification.getEventType().name(), "FAILURE");
         }
     }
 }
