@@ -8,11 +8,13 @@ import com.uber.notification.application.provider.ProviderRecipient;
 import com.uber.notification.common.exception.NotificationDeliveryException;
 import com.uber.notification.domain.model.Notification;
 import com.uber.notification.domain.model.NotificationChannel;
+import org.springframework.context.annotation.Profile;
 import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Component;
 
 /** Strategy implementation for the SMS channel using Twilio's Programmable Messaging API. */
 @Component
+@Profile("!local")
 public class TwilioSmsProvider implements NotificationProvider {
 
     private final String fromNumber;
