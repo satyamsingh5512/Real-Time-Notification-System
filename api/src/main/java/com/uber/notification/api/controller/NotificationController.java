@@ -3,6 +3,8 @@ package com.uber.notification.api.controller;
 import com.uber.notification.api.dto.notification.NotificationResponse;
 import com.uber.notification.api.security.JwtService;
 import com.uber.notification.application.usecase.NotificationHistoryUseCase;
+import com.uber.notification.domain.model.EventType;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
@@ -30,9 +32,13 @@ public class NotificationController {
     public List<NotificationResponse> getHistory(
             @AuthenticationPrincipal JwtService.AuthenticatedPrincipal principal,
             @RequestParam(defaultValue = "false") boolean includeDeleted,
+            @RequestParam(required = false) EventType type,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) java.time.Instant since,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) java.time.Instant before,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
-        return historyUseCase.getHistory(principal.userId(), includeDeleted, page, Math.min(size, 100)).stream()
+        return historyUseCase.getHistory(
+                principal.userId(), includeDeleted, type, since, before, page, Math.min(size, 100)).stream()
                 .map(NotificationResponse::from)
                 .toList();
     }
@@ -52,6 +58,12 @@ public class NotificationController {
     public NotificationResponse markUnread(@AuthenticationPrincipal JwtService.AuthenticatedPrincipal principal,
                                             @PathVariable UUID id) {
         return NotificationResponse.from(historyUseCase.markUnread(id, principal.userId()));
+    }
+
+    @PatchMapping("/read-all")
+    public Map<String, Integer> markAllRead(
+            @AuthenticationPrincipal JwtService.AuthenticatedPrincipal principal) {
+        return Map.of("markedRead", historyUseCase.markAllRead(principal.userId()));
     }
 
     @DeleteMapping("/{id}")
