@@ -6,10 +6,12 @@ import com.uber.notification.application.provider.ProviderRecipient;
 import com.uber.notification.common.exception.NotificationDeliveryException;
 import com.uber.notification.domain.model.Notification;
 import com.uber.notification.domain.model.NotificationChannel;
+import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 
 /** Strategy implementation for the PUSH channel using Firebase Cloud Messaging. */
 @Component
+@Profile("!local")
 public class FcmPushProvider implements NotificationProvider {
 
     private final FirebaseMessaging firebaseMessaging;
