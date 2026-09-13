@@ -24,10 +24,12 @@ dependencies {
 
     implementation("com.fasterxml.jackson.core:jackson-databind")
     implementation("org.springframework.integration:spring-integration-redis:6.3.4")
+    implementation("io.micrometer:micrometer-core")
+    implementation("org.springframework:spring-web")
 
     testImplementation("org.springframework.boot:spring-boot-starter-test")
-    testImplementation("org.testcontainers:junit-jupiter:1.20.2")
-    testImplementation("org.testcontainers:postgresql:1.20.2")
-    testImplementation("org.testcontainers:kafka:1.20.2")
+    testImplementation("org.testcontainers:junit-jupiter:1.21.3")
+    testImplementation("org.testcontainers:postgresql:1.21.3")
+    testImplementation("org.testcontainers:kafka:1.21.3")
     testImplementation("org.springframework.kafka:spring-kafka-test")
 }
