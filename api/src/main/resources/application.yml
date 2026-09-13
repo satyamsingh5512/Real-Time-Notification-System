@@ -62,6 +62,21 @@ notification:
     firebase-credentials-path: ${FIREBASE_CREDENTIALS_PATH:classpath:firebase-service-account.json}
   scheduler:
     poll-interval-ms: 10000
+  alerting:
+    # Generic webhook (Slack incoming webhook / PagerDuty / custom on-call endpoint).
+    # Empty = alerting disabled (log + metrics only).
+    webhook-url: ${DLQ_ALERT_WEBHOOK_URL:}
+  retention:
+    enabled: ${NOTIFICATION_RETENTION_ENABLED:true}
+    days: ${NOTIFICATION_RETENTION_DAYS:90}
+    cron: ${NOTIFICATION_RETENTION_CRON:0 0 2 * * *}
+  providers:
+    # Informational flag; actual provider selection is via the Spring `local` profile
+    # (SPRING_PROFILES_ACTIVE=local activates MockEmail/Sms/Push providers).
+    mock-enabled: ${MOCK_PROVIDERS_ENABLED:false}
+  rate-limit:
+    enabled: ${RATE_LIMIT_ENABLED:true}
+    requests-per-minute: ${RATE_LIMIT_PER_MINUTE:300}
 
 springdoc:
   swagger-ui:
