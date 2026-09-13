@@ -50,6 +50,11 @@ public class NotificationJpaEntity {
     @Column(nullable = false)
     private NotificationStatus status;
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private com.uber.notification.domain.model.NotificationPriority priority =
+            com.uber.notification.domain.model.NotificationPriority.MEDIUM;
+
     @Column(name = "attempt_count", nullable = false)
     private int attemptCount;
 
@@ -92,6 +97,20 @@ public class NotificationJpaEntity {
                                   int maxAttempts, String lastErrorMessage, Instant scheduledFor,
                                   Instant sentAt, Instant readAt, boolean deleted, Instant createdAt,
                                   Instant updatedAt, String idempotencyKey) {
+        this(id, userId, eventType, channel, templateCode, payload, renderedSubject, renderedBody,
+                status, com.uber.notification.domain.model.NotificationPriority.MEDIUM, attemptCount,
+                maxAttempts, lastErrorMessage, scheduledFor, sentAt, readAt, deleted, createdAt,
+                updatedAt, idempotencyKey);
+    }
+
+    public NotificationJpaEntity(UUID id, UUID userId, EventType eventType, NotificationChannel channel,
+                                  String templateCode, Map<String, String> payload, String renderedSubject,
+                                  String renderedBody, NotificationStatus status,
+                                  com.uber.notification.domain.model.NotificationPriority priority,
+                                  int attemptCount,
+                                  int maxAttempts, String lastErrorMessage, Instant scheduledFor,
+                                  Instant sentAt, Instant readAt, boolean deleted, Instant createdAt,
+                                  Instant updatedAt, String idempotencyKey) {
         this.id = id;
         this.userId = userId;
         this.eventType = eventType;
@@ -101,6 +120,8 @@ public class NotificationJpaEntity {
         this.renderedSubject = renderedSubject;
         this.renderedBody = renderedBody;
         this.status = status;
+        this.priority = priority == null
+                ? com.uber.notification.domain.model.NotificationPriority.MEDIUM : priority;
         this.attemptCount = attemptCount;
         this.maxAttempts = maxAttempts;
         this.lastErrorMessage = lastErrorMessage;
@@ -122,6 +143,7 @@ public class NotificationJpaEntity {
     public String getRenderedSubject() { return renderedSubject; }
     public String getRenderedBody() { return renderedBody; }
     public NotificationStatus getStatus() { return status; }
+    public com.uber.notification.domain.model.NotificationPriority getPriority() { return priority; }
     public int getAttemptCount() { return attemptCount; }
     public int getMaxAttempts() { return maxAttempts; }
     public String getLastErrorMessage() { return lastErrorMessage; }
