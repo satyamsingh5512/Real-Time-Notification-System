@@ -230,3 +230,57 @@ This system intercepts those events, evaluates user-defined preferences (like op
 - **Docker & Docker Compose**: Full local environment orchestration.
 - **Kubernetes (K8s)**: Deployment manifests for HPA (Horizontal Pod Autoscaler), PDB, and rolling updates.
 - **k6 (Grafana)**: Used for heavy REST API read-path load testing.
+
+---
+
+## 🚀 Quickstart
+
+```bash
+cp .env.example .env            # fill in secrets as needed
+docker compose up -d --build    # postgres + redis + kafka + backend + nginx/SPA
+```
+
+- UI: http://localhost (React SPA, Notion-inspired `frontend/DESIGN.md` system)
+- API: http://localhost:8080 · Swagger: http://localhost:8080/swagger-ui.html
+- Health/metrics: `/actuator/health`, `/actuator/prometheus`
+
+**Local dev without cloud credentials** (log-only delivery, no SES/Twilio/Firebase):
+
+```bash
+docker compose up -d postgres redis kafka
+SPRING_PROFILES_ACTIVE=local ./gradlew :api:bootRun   # MockEmail/Sms/Push providers
+cd frontend && npm install && npm run dev              # http://localhost:5173
+```
+
+---
+
+## 📡 API Surface (v1)
+
+| Area | Endpoints |
+|---|---|
+| Auth | `POST /api/v1/auth/register`, `POST /api/v1/auth/login` |
+| Inbox | `GET /api/v1/notifications?type=&since=&before=&page=&size=`, `GET /unread-count`, `PATCH /{id}/read`, `PATCH /{id}/unread`, `PATCH /read-all`, `DELETE /{id}` |
+| Preferences | `GET /api/v1/preferences`, `PUT /{eventType}/channel`, `PUT /{eventType}/quiet-hours` |
+| Admin (`ROLE_ADMIN`) | `GET /api/v1/admin/stats`, `POST /api/v1/admin/broadcast`, `GET /api/v1/admin/delivery-metrics`, `GET /api/v1/admin/active-sessions`, templates CRUD |
+| Internal (`SERVICE`/`ADMIN`) | `POST /api/v1/internal/notifications/schedule` |
+| Realtime | `ws://host/ws/notifications?token=<jwt>` (server→client push) |
+
+---
+
+## 📈 Reliability, Observability & Ops
+
+- **Retry:** time-bucketed topics (`notification.retry-30s/-5m/-30m`) bound worst-case consumer waits; legacy `notification.retry` still consumed. A Redis ZSET delay queue (`RedisRetryDelayQueue`) is available as an alternative.
+- **Poison pills:** malformed event payloads are quarantined to `events.poison-pill` with per-topic counters (`kafka.events.poison-pill.total`).
+- **DLQ:** `notification.dlq` increments `notifications.dlq.total{reason}` and fires a Slack/PagerDuty-compatible webhook (`notification.alerting.webhook-url`).
+- **Metrics (`/actuator/prometheus`):** `notifications.dispatched.total{channel,eventType,status}`, `notification.delivery.latency{channel}`, `websocket.sessions.active`, `kafka.events.consumed.total{eventType}`, `notifications.retry.scheduled.total{bucket}`.
+- **Retention:** `NotificationRetentionJob` hard-deletes rows older than `notification.retention.days` (default 90) nightly.
+- **Rate limiting:** fixed-window Redis limiter on notification/internal/broadcast paths (429 + `Retry-After`), fail-open; nginx adds edge limiting too.
+- **Priorities:** notifications carry `LOW/MEDIUM/HIGH` priority (V3 migration) surfaced in inbox responses.
+
+## ✅ Testing
+
+```bash
+./gradlew test   # 94 tests: WebMvc slices, use-case units, Testcontainers (Postgres) + Kafka/Redis flows
+```
+
+Requires JDK 21 to run Gradle and a Docker daemon for the Testcontainers suites.
