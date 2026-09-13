@@ -1,5 +1,6 @@
 package com.uber.notification.infrastructure.config;
 
+import com.uber.notification.application.port.DeliveryMetricsPort;
 import com.uber.notification.application.port.PasswordHasher;
 import com.uber.notification.application.port.RecipientResolverPort;
 import com.uber.notification.application.port.RetryPublisherPort;
@@ -30,7 +31,10 @@ public class UseCaseConfig {
     @Bean
     public NotificationProviderRegistry notificationProviderRegistry(List<NotificationProvider> providers) {
         Map<NotificationChannel, NotificationProvider> byChannel = providers.stream()
-                .collect(Collectors.toMap(NotificationProvider::supportedChannel, p -> p));
+                .collect(Collectors.toMap(NotificationProvider::supportedChannel, p -> p,
+                        // Prefer mock providers when both real + mock are on the classpath
+                        // (e.g. local profile overlap): mocks log instead of calling cloud APIs.
+                        (a, b) -> a.getClass().getSimpleName().startsWith("Mock") ? a : b));
         return new NotificationProviderRegistry(byChannel);
     }
 
@@ -46,9 +50,12 @@ public class UseCaseConfig {
             NotificationTemplateRepository templateRepository,
             NotificationProviderRegistry providerRegistry,
             RecipientResolverPort recipientResolver,
-            RetryPublisherPort retryPublisher) {
+            RetryPublisherPort retryPublisher,
+            // Optional: present in the full app (Micrometer adapter), absent in persistence-only test slice.
+            @org.springframework.beans.factory.annotation.Autowired(required = false) DeliveryMetricsPort deliveryMetrics) {
         return new DeliverNotificationUseCase(notificationRepository, templateRepository,
-                providerRegistry, recipientResolver, retryPublisher);
+                providerRegistry, recipientResolver, retryPublisher,
+                deliveryMetrics == null ? DeliveryMetricsPort.NOOP : deliveryMetrics);
     }
 
     @Bean
@@ -75,5 +82,20 @@ public class UseCaseConfig {
     public ManageNotificationTemplateUseCase manageNotificationTemplateUseCase(
             NotificationTemplateRepository templateRepository) {
         return new ManageNotificationTemplateUseCase(templateRepository);
+    }
+
+    @Bean
+    public AdminDashboardUseCase adminDashboardUseCase(NotificationRepository notificationRepository,
+                                                       UserRepository userRepository) {
+        return new AdminDashboardUseCase(notificationRepository, userRepository);
+    }
+
+    @Bean
+    public BroadcastNotificationUseCase broadcastNotificationUseCase(
+            NotificationRepository notificationRepository,
+            UserRepository userRepository,
+            DeliverNotificationUseCase deliverNotificationUseCase) {
+        return new BroadcastNotificationUseCase(
+                notificationRepository, userRepository, deliverNotificationUseCase);
     }
 }
