@@ -83,5 +83,16 @@ services:
       kafka:
         condition: service_healthy
 
+  # Edge proxy + React SPA (Notion-styled UI in frontend/). Single entrypoint: http://localhost
+  nginx:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    ports:
+      - "80:80"
+    depends_on:
+      notification-platform:
+        condition: service_started
+
 volumes:
   postgres_data:
