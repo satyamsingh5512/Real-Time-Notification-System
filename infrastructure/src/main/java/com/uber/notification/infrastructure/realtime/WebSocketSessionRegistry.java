@@ -1,5 +1,7 @@
 package com.uber.notification.infrastructure.realtime;
 
+import com.uber.notification.infrastructure.metrics.NotificationMetrics;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
@@ -18,15 +20,25 @@ import java.util.concurrent.ConcurrentHashMap;
 public class WebSocketSessionRegistry {
 
     private final ConcurrentHashMap<String, Set<WebSocketSession>> sessionsByUserId = new ConcurrentHashMap<>();
+    private final NotificationMetrics notificationMetrics;
+
+    public WebSocketSessionRegistry(@Autowired(required = false) NotificationMetrics notificationMetrics) {
+        this.notificationMetrics = notificationMetrics;
+    }
 
     public void register(String userId, WebSocketSession session) {
         sessionsByUserId.computeIfAbsent(userId, k -> ConcurrentHashMap.newKeySet()).add(session);
+        if (notificationMetrics != null) {
+            notificationMetrics.onSessionOpened();
+        }
     }
 
     public void unregister(String userId, WebSocketSession session) {
         Set<WebSocketSession> sessions = sessionsByUserId.get(userId);
         if (sessions != null) {
-            sessions.remove(session);
+            if (sessions.remove(session) && notificationMetrics != null) {
+                notificationMetrics.onSessionClosed();
+            }
             if (sessions.isEmpty()) {
                 sessionsByUserId.remove(userId);
             }
@@ -52,5 +64,9 @@ public class WebSocketSessionRegistry {
     public boolean hasLocalSession(String userId) {
         Set<WebSocketSession> sessions = sessionsByUserId.get(userId);
         return sessions != null && !sessions.isEmpty();
+    }
+
+    public int activeSessionCount() {
+        return sessionsByUserId.values().stream().mapToInt(Set::size).sum();
     }
 }
