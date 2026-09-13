@@ -47,10 +47,22 @@ public class NotificationRepositoryAdapter implements NotificationRepository {
 
     @Override
     public List<Notification> findHistoryForUser(UUID userId, boolean includeDeleted, int page, int size) {
+        return findHistoryForUser(userId, includeDeleted, null, null, null, page, size);
+    }
+
+    @Override
+    public List<Notification> findHistoryForUser(UUID userId, boolean includeDeleted,
+                                                 com.uber.notification.domain.model.EventType eventType,
+                                                 Instant since, Instant before, int page, int size) {
         var pageable = PageRequest.of(page, size);
-        var results = includeDeleted
-                ? jpaRepository.findByUserIdOrderByCreatedAtDesc(userId, pageable)
-                : jpaRepository.findByUserIdAndDeletedOrderByCreatedAtDesc(userId, false, pageable);
+        List<com.uber.notification.infrastructure.persistence.entity.NotificationJpaEntity> results;
+        if (eventType == null && since == null && before == null) {
+            results = includeDeleted
+                    ? jpaRepository.findByUserIdOrderByCreatedAtDesc(userId, pageable)
+                    : jpaRepository.findByUserIdAndDeletedOrderByCreatedAtDesc(userId, false, pageable);
+        } else {
+            results = jpaRepository.findFilteredHistory(userId, includeDeleted, eventType, since, before, pageable);
+        }
         return results.stream().map(NotificationMapper::toDomain).toList();
     }
 
@@ -60,9 +72,50 @@ public class NotificationRepositoryAdapter implements NotificationRepository {
     }
 
     @Override
+    @org.springframework.transaction.annotation.Transactional
+    public int markAllRead(UUID userId) {
+        return jpaRepository.markAllRead(userId);
+    }
+
+    @Override
+    public long countByStatus(NotificationStatus status) {
+        return jpaRepository.countByStatus(status);
+    }
+
+    @Override
+    public long countTotal() {
+        return jpaRepository.count();
+    }
+
+    @Override
+    public long countCreatedSince(Instant since) {
+        return jpaRepository.countByCreatedAtAfter(since);
+    }
+
+    @Override
+    public long countUnreadTotal() {
+        return jpaRepository.countByReadAtIsNullAndDeletedFalse();
+    }
+
+    @Override
+    public long countReadTotal() {
+        return jpaRepository.countByReadAtIsNotNull();
+    }
+
+    @Override
     public List<Notification> findByStatus(NotificationStatus status, int limit) {
         return jpaRepository.findByStatus(status, PageRequest.of(0, limit)).stream()
                 .map(NotificationMapper::toDomain)
                 .toList();
+    }
+
+    @Override
+    public List<UUID> findIdsCreatedBefore(Instant cutoff, int limit) {
+        return jpaRepository.findIdsCreatedBefore(cutoff, PageRequest.of(0, limit));
+    }
+
+    @Override
+    public void deleteByIds(List<UUID> ids) {
+        jpaRepository.deleteAllById(ids);
     }
 }
