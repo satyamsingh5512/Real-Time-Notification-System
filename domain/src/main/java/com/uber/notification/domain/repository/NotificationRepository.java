@@ -22,7 +22,31 @@ public interface NotificationRepository {
 
     List<Notification> findHistoryForUser(UUID userId, boolean includeDeleted, int page, int size);
 
+    /** Filtered history: optional event type + created-at window (null = no constraint). */
+    List<Notification> findHistoryForUser(UUID userId, boolean includeDeleted,
+                                          com.uber.notification.domain.model.EventType eventType,
+                                          Instant since, Instant before, int page, int size);
+
     long countUnread(UUID userId);
 
+    /** Marks every unread, non-deleted notification of the user as read. Returns rows touched. */
+    int markAllRead(UUID userId);
+
     List<Notification> findByStatus(NotificationStatus status, int limit);
+
+    long countByStatus(NotificationStatus status);
+
+    long countTotal();
+
+    long countCreatedSince(Instant since);
+
+    long countUnreadTotal();
+
+    long countReadTotal();
+
+    /** IDs of notifications created at or before {@code cutoff} (retention purge candidate). */
+    List<UUID> findIdsCreatedBefore(Instant cutoff, int limit);
+
+    /** Hard-delete by IDs (used by the retention job after the retention window). */
+    void deleteByIds(List<UUID> ids);
 }
