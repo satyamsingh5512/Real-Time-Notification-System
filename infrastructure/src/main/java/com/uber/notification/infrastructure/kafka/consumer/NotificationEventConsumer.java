@@ -7,6 +7,8 @@ import com.uber.notification.application.usecase.ProcessIncomingEventUseCase;
 import com.uber.notification.domain.model.Notification;
 import com.uber.notification.infrastructure.kafka.KafkaTopics;
 import com.uber.notification.infrastructure.kafka.dto.EventMessage;
+import com.uber.notification.infrastructure.kafka.producer.PoisonPillPublisher;
+import com.uber.notification.infrastructure.metrics.NotificationMetrics;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.kafka.annotation.KafkaListener;
@@ -34,58 +36,67 @@ public class NotificationEventConsumer {
     private final ProcessIncomingEventUseCase processIncomingEventUseCase;
     private final DeliverNotificationUseCase deliverNotificationUseCase;
     private final ObjectMapper objectMapper;
+    private final PoisonPillPublisher poisonPillPublisher;
+    private final NotificationMetrics notificationMetrics;
 
     public NotificationEventConsumer(ProcessIncomingEventUseCase processIncomingEventUseCase,
                                       DeliverNotificationUseCase deliverNotificationUseCase,
-                                      ObjectMapper objectMapper) {
+                                      ObjectMapper objectMapper,
+                                      @org.springframework.beans.factory.annotation.Autowired(required = false) PoisonPillPublisher poisonPillPublisher,
+                                      @org.springframework.beans.factory.annotation.Autowired(required = false) NotificationMetrics notificationMetrics) {
         this.processIncomingEventUseCase = processIncomingEventUseCase;
         this.deliverNotificationUseCase = deliverNotificationUseCase;
         this.objectMapper = objectMapper;
+        this.poisonPillPublisher = poisonPillPublisher;
+        this.notificationMetrics = notificationMetrics;
     }
 
     @KafkaListener(topics = KafkaTopics.ORDER_PLACED, groupId = "notification-platform-events")
     public void onOrderPlaced(String payload) {
-        handle(payload);
+        handle(KafkaTopics.ORDER_PLACED, payload);
     }
 
     @KafkaListener(topics = KafkaTopics.ORDER_DELIVERED, groupId = "notification-platform-events")
     public void onOrderDelivered(String payload) {
-        handle(payload);
+        handle(KafkaTopics.ORDER_DELIVERED, payload);
     }
 
     @KafkaListener(topics = KafkaTopics.PAYMENT_SUCCESS, groupId = "notification-platform-events")
     public void onPaymentSuccess(String payload) {
-        handle(payload);
+        handle(KafkaTopics.PAYMENT_SUCCESS, payload);
     }
 
     @KafkaListener(topics = KafkaTopics.COMMENT_ADDED, groupId = "notification-platform-events")
     public void onCommentAdded(String payload) {
-        handle(payload);
+        handle(KafkaTopics.COMMENT_ADDED, payload);
     }
 
     @KafkaListener(topics = KafkaTopics.LIKE_RECEIVED, groupId = "notification-platform-events")
     public void onLikeReceived(String payload) {
-        handle(payload);
+        handle(KafkaTopics.LIKE_RECEIVED, payload);
     }
 
     @KafkaListener(topics = KafkaTopics.MENTIONED, groupId = "notification-platform-events")
     public void onMentioned(String payload) {
-        handle(payload);
+        handle(KafkaTopics.MENTIONED, payload);
     }
 
     @KafkaListener(topics = KafkaTopics.PASSWORD_RESET, groupId = "notification-platform-events")
     public void onPasswordReset(String payload) {
-        handle(payload);
+        handle(KafkaTopics.PASSWORD_RESET, payload);
     }
 
     @KafkaListener(topics = KafkaTopics.OTP_GENERATED, groupId = "notification-platform-events")
     public void onOtpGenerated(String payload) {
-        handle(payload);
+        handle(KafkaTopics.OTP_GENERATED, payload);
     }
 
-    private void handle(String payload) {
+    private void handle(String sourceTopic, String payload) {
         try {
             EventMessage message = objectMapper.readValue(payload, EventMessage.class);
+            if (notificationMetrics != null) {
+                notificationMetrics.incrementKafkaConsumed(message.eventType().name());
+            }
             DomainEvent event = new DomainEvent(
                     message.eventId(),
                     message.eventType(),
@@ -103,9 +114,14 @@ public class NotificationEventConsumer {
             }
         } catch (Exception e) {
             log.error("Failed to process inbound event payload: {}", payload, e);
-            // Intentionally not rethrown: Spring Kafka's default error handler would infinitely
-            // retry a poison-pill message. Malformed events are logged and dropped; consider
-            // wiring a DeadLetterPublishingRecoverer here for stricter guarantees.
+            // Quarantine the poison pill for inspection/replay instead of silently dropping it.
+            // Not rethrown: Spring Kafka's default error handler would infinitely retry it.
+            if (poisonPillPublisher != null) {
+                poisonPillPublisher.quarantine(sourceTopic, payload, e.getMessage());
+            }
+            if (notificationMetrics != null) {
+                notificationMetrics.incrementPoisonPill(sourceTopic);
+            }
         }
     }
 }
