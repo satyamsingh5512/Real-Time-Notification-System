@@ -2,8 +2,10 @@ package com.uber.notification.infrastructure.kafka.consumer;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.uber.notification.domain.repository.NotificationRepository;
+import com.uber.notification.infrastructure.alerting.DlqAlertingService;
 import com.uber.notification.infrastructure.kafka.KafkaTopics;
 import com.uber.notification.infrastructure.kafka.dto.NotificationRefMessage;
+import com.uber.notification.infrastructure.metrics.NotificationMetrics;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.kafka.annotation.KafkaListener;
@@ -22,10 +24,15 @@ public class DeadLetterTopicConsumer {
 
     private final NotificationRepository notificationRepository;
     private final ObjectMapper objectMapper;
+    private final NotificationMetrics notificationMetrics;
+    private final DlqAlertingService alertingService;
 
-    public DeadLetterTopicConsumer(NotificationRepository notificationRepository, ObjectMapper objectMapper) {
+    public DeadLetterTopicConsumer(NotificationRepository notificationRepository, ObjectMapper objectMapper,
+                                   NotificationMetrics notificationMetrics, DlqAlertingService alertingService) {
         this.notificationRepository = notificationRepository;
         this.objectMapper = objectMapper;
+        this.notificationMetrics = notificationMetrics;
+        this.alertingService = alertingService;
     }
 
     @KafkaListener(topics = KafkaTopics.NOTIFICATION_DLQ, groupId = "notification-platform-dlq")
@@ -34,7 +41,9 @@ public class DeadLetterTopicConsumer {
             NotificationRefMessage message = objectMapper.readValue(payload, NotificationRefMessage.class);
             log.error("DEAD_LETTER notification={} attempts={} reason={}",
                     message.notificationId(), message.attemptNumber(), message.reason());
-            // TODO integrate with alerting (PagerDuty/Slack webhook) and a metrics counter here.
+            notificationMetrics.incrementDlq(message.reason());
+            alertingService.alertDeadLetter(
+                    message.notificationId(), message.attemptNumber(), message.reason());
         } catch (Exception e) {
             log.error("Failed to process DLQ message: {}", payload, e);
         }
