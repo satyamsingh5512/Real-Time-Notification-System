@@ -30,6 +30,18 @@ subprojects {
     the<io.spring.gradle.dependencymanagement.dsl.DependencyManagementExtension>().apply {
         imports {
             mavenBom("org.springframework.boot:spring-boot-dependencies:${property("springBootVersion")}")
+            // docker-java 3.7+ defaults to Docker API 1.44 (required by current daemons).
+            mavenBom("com.github.docker-java:docker-java-bom:3.7.1")
+        }
+        // Testcontainers 1.21.3 speaks a Docker API version compatible with current
+        // daemons; Boot 3.3.4's BOM would otherwise pin it to 1.19.8 (API 1.32 → rejected).
+        dependencies {
+            dependency("org.testcontainers:testcontainers:1.21.3")
+            dependency("org.testcontainers:junit-jupiter:1.21.3")
+            dependency("org.testcontainers:postgresql:1.21.3")
+            dependency("org.testcontainers:kafka:1.21.3")
+            dependency("org.testcontainers:jdbc:1.21.3")
+            dependency("org.testcontainers:database-commons:1.21.3")
         }
     }
 
