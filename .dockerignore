@@ -9,3 +9,5 @@ k8s/
 docs/
 load-testing/
 *.md
+frontend/node_modules/
+frontend/dist/
