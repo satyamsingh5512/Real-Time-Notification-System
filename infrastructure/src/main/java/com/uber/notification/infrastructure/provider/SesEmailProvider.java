@@ -7,6 +7,7 @@ import com.uber.notification.domain.model.Notification;
 import com.uber.notification.domain.model.NotificationChannel;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 import software.amazon.awssdk.services.ses.SesClient;
 import software.amazon.awssdk.services.ses.model.*;
@@ -16,6 +17,7 @@ import software.amazon.awssdk.services.ses.model.*;
  * {@code NotificationProviderRegistry} keyed by {@code NotificationChannel.EMAIL}.
  */
 @Component
+@Profile("!local")
 public class SesEmailProvider implements NotificationProvider {
 
     private static final Logger log = LoggerFactory.getLogger(SesEmailProvider.class);
