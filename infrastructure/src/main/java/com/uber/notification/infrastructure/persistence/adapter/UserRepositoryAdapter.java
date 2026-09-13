@@ -39,4 +39,14 @@ public class UserRepositoryAdapter implements UserRepository {
         var saved = jpaRepository.save(UserMapper.toEntity(user));
         return UserMapper.toDomain(saved);
     }
+
+    @Override
+    public long count() {
+        return jpaRepository.count();
+    }
+
+    @Override
+    public java.util.List<UUID> findAllIds(int page, int size) {
+        return jpaRepository.findAllIds(org.springframework.data.domain.PageRequest.of(page, size));
+    }
 }
