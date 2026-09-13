@@ -1,0 +1,20 @@
+# Local-dev profile: no cloud credentials needed.
+# Run with: SPRING_PROFILES_ACTIVE=local ./gradlew :api:bootRun
+# Activates MockEmailProvider / MockSmsProvider / MockPushProvider (log-only delivery),
+# skips SES + Firebase bean creation, and shortens the scheduler poll for fast feedback.
+spring:
+  jpa:
+    hibernate:
+      ddl-auto: validate
+  kafka:
+    # Local profile still expects Kafka/Redis/Postgres from `docker compose up postgres redis kafka`
+    # (or set spring.kafka.listener.auto-startup=false to run fully brokerless).
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+
+notification:
+  scheduler:
+    poll-interval-ms: 5000
+  providers:
+    mock-enabled: true
+  retention:
+    enabled: false
