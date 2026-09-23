@@ -1,0 +1,20 @@
+- generic [ref=e4]:
+  - generic [ref=e6]:
+    - heading "Welcome back" [level=1] [ref=e7]
+    - paragraph [ref=e8]: Sign in to your notification workspace.
+    - generic [ref=e9]:
+      - generic [ref=e10]:
+        - generic [ref=e11]: Email
+        - textbox "you@example.com" [ref=e12]
+      - generic [ref=e13]:
+        - generic [ref=e14]: Password
+        - textbox "••••••••" [ref=e15]
+      - button "Log in" [ref=e16] [cursor=pointer]
+    - paragraph [ref=e17]:
+      - text: New here?
+      - link "Create an account" [ref=e18] [cursor=pointer]:
+        - /url: /register
+  - generic [ref=e19]:
+    - heading "Every event, delivered live." [level=2] [ref=e26]
+    - paragraph [ref=e27]: Orders, payments, mentions and OTPs stream to your inbox over WebSocket — no refresh required.
+    - generic [ref=e28]: 10K+ events / hour
