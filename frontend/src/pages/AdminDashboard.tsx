@@ -39,7 +39,7 @@ export function AdminDashboard({ notify }: { notify: (title: string, body: strin
         <EmptyState
           glyph="⬣"
           title="Analytics unavailable"
-          body="The /api/v1/admin/stats endpoint is not enabled on this backend build yet — broadcast still works once implemented."
+          body="Could not reach the backend stats endpoint. Start it with docker compose up -d."
         />
       ) : (
         <div className="nt-stats" style={{ gridTemplateColumns: 'repeat(5, 1fr)' }}>
