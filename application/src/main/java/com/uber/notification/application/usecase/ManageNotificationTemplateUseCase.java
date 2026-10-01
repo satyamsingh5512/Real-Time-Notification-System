@@ -24,6 +24,16 @@ public class ManageNotificationTemplateUseCase {
 
     public NotificationTemplate createNewVersion(String code, NotificationChannel channel, String locale,
                                                   String subjectTemplate, String bodyTemplate) {
+        return createNewVersion(code, channel, locale, subjectTemplate, bodyTemplate, 100);
+    }
+
+    /**
+     * Gradual rollout (DoorDash pattern): the new version serves {@code trafficPct}%
+     * of users (stable per-user hash); the rest keep rendering with the previous
+     * version. {@code trafficPct=100} preserves the old cutover behavior.
+     */
+    public NotificationTemplate createNewVersion(String code, NotificationChannel channel, String locale,
+                                                  String subjectTemplate, String bodyTemplate, int trafficPct) {
         List<NotificationTemplate> existing = templateRepository.findAllVersionsByCode(code);
         int nextVersion = existing.stream()
                 .filter(t -> t.getChannel() == channel && t.getLocale().equals(locale))
@@ -31,6 +41,9 @@ public class ManageNotificationTemplateUseCase {
                 .max()
                 .orElse(0) + 1;
 
+        // The single-active invariant (partial unique index uq_templates_active_version)
+        // is preserved: the newest version is always the active one, and the rollout
+        // split happens at render time via traffic_pct (see TemplateRolloutSelector).
         existing.stream()
                 .filter(t -> t.getChannel() == channel && t.getLocale().equals(locale) && t.isActive())
                 .forEach(t -> {
@@ -40,7 +53,7 @@ public class ManageNotificationTemplateUseCase {
 
         NotificationTemplate template = new NotificationTemplate(
                 IdGenerator.newId(), code, channel, nextVersion, subjectTemplate, bodyTemplate,
-                locale, true, Instant.now()
+                locale, true, Instant.now(), trafficPct
         );
         return templateRepository.save(template);
     }
