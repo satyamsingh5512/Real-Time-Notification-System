@@ -240,9 +240,9 @@ cp .env.example .env            # fill in secrets as needed
 docker compose up -d --build    # postgres + redis + kafka + backend + nginx/SPA
 ```
 
-- UI: http://localhost (React SPA, Notion-inspired `frontend/DESIGN.md` system)
-- API: http://localhost:8080 · Swagger: http://localhost:8080/swagger-ui.html
-- Health/metrics: `/actuator/health`, `/actuator/prometheus`
+- UI: http://localhost (React SPA — public `/welcome` landing, dark/light theme, mobile bottom nav)
+- API: http://localhost:8080 · Swagger: http://localhost:8080/swagger-ui.html (Authorize with `Bearer <token>`)
+- Health: `/health`, `/health/live`, `/health/ready` (+ `/actuator/health`, `/actuator/prometheus`)
 
 **Local dev without cloud credentials** (log-only delivery, no SES/Twilio/Firebase):
 
@@ -260,7 +260,8 @@ cd frontend && npm install && npm run dev              # http://localhost:5173
 |---|---|
 | Auth | `POST /api/v1/auth/register`, `POST /api/v1/auth/login` |
 | Inbox | `GET /api/v1/notifications?type=&since=&before=&page=&size=`, `GET /unread-count`, `PATCH /{id}/read`, `PATCH /{id}/unread`, `PATCH /read-all`, `DELETE /{id}` |
-| Preferences | `GET /api/v1/preferences`, `PUT /{eventType}/channel`, `PUT /{eventType}/quiet-hours` |
+| Preferences | `GET /api/v1/preferences`, `PUT /{eventType}/channel`, `PUT /{eventType}/quiet-hours`, `PUT /{eventType}/intent`, `PUT /{eventType}/push`, `PUT /{eventType}/frequency-caps`, `PUT /{eventType}/digest`, `DELETE /{eventType}` |
+| Health | `GET /health`, `GET /health/live`, `GET /health/ready` |
 | Admin (`ROLE_ADMIN`) | `GET /api/v1/admin/stats`, `POST /api/v1/admin/broadcast`, `GET /api/v1/admin/delivery-metrics`, `GET /api/v1/admin/active-sessions`, templates CRUD |
 | Internal (`SERVICE`/`ADMIN`) | `POST /api/v1/internal/notifications/schedule` |
 | Realtime | `ws://host/ws/notifications?token=<jwt>` (server→client push) |
@@ -274,8 +275,32 @@ cd frontend && npm install && npm run dev              # http://localhost:5173
 - **DLQ:** `notification.dlq` increments `notifications.dlq.total{reason}` and fires a Slack/PagerDuty-compatible webhook (`notification.alerting.webhook-url`).
 - **Metrics (`/actuator/prometheus`):** `notifications.dispatched.total{channel,eventType,status}`, `notification.delivery.latency{channel}`, `websocket.sessions.active`, `kafka.events.consumed.total{eventType}`, `notifications.retry.scheduled.total{bucket}`.
 - **Retention:** `NotificationRetentionJob` hard-deletes rows older than `notification.retention.days` (default 90) nightly.
-- **Rate limiting:** fixed-window Redis limiter on notification/internal/broadcast paths (429 + `Retry-After`), fail-open; nginx adds edge limiting too.
+- **Rate limiting:** fixed-window Redis limiter on notification/internal/broadcast **plus auth (login/register)** paths (429 + `Retry-After`), fail-open; nginx adds edge limiting too.
 - **Priorities:** notifications carry `LOW/MEDIUM/HIGH` priority (V3 migration) surfaced in inbox responses.
+
+## 🧠 Notification quality features
+
+Patterns taken from production notification systems (Slack's 2026 rebuild, LinkedIn's
+Air Traffic Controller, SuprSend digests, DoorDash template rollout) and implemented here:
+
+| Feature | Behavior | Where |
+|---|---|---|
+| **Intent vs delivery split** | `intent` (ALL / MENTIONS / MUTE) decides *whether* an event notifies; channel opt-in, `pushEnabled`, quiet hours, caps and digest decide *how*. Security events (OTP, password reset) always deliver. | `NotificationIntent`, `ProcessIncomingEventUseCase` |
+| **Digest batching** | Opted-in low-value email becomes `QUEUED_DIGEST` and is flushed as **one grouped email per user** on a cron. Empty digests never send; a 1-item digest reuses its own subject; a failed digest stays queued. In-app stays instant. | `DeliveryPolicy`, `DigestFlushUseCase`, `DigestFlushJob` |
+| **ATC frequency caps** | `maxPushesPerDay` + `minHoursBetweenPushes` per event type. Over-budget pushes are **deferred (SCHEDULED), never dropped**; other channels are never capped. | `FrequencyCapPolicy` |
+| **Event schema validation** | All 8 topics validated before fan-out (required attributes, UUID user, ≤5 min clock skew). Invalid payloads are quarantined as poison pills with a precise reason instead of persisting partial rows. | `EventMessageValidator`, `NotificationEventConsumer` |
+| **Provider circuit breaker** | Per-channel breaker on consecutive *retryable* failures (429s/outage). Opens → fails fast into the retry path; half-open after cooldown. Permanent failures never trip it. | `ProviderCircuitBreaker`, `DeliveryGuardPort` |
+| **Gradual template rollout** | New template version serves `trafficPct`% of users via a stable per-user hash (no flip-flopping); everyone else keeps the previous version. `trafficPct=100` = instant cutover. | `TemplateRolloutSelector`, `traffic_pct` |
+| **Typed WS frames + heartbeat** | `{"type":"notification"\|"unread_count"\|"connected"\|"pong"}` envelopes, 30s server ping, unread count pushed without a page refresh, per-session send serialization, dead-session eviction. | `NotificationWebSocketHandler`, `RedisRealtimeSubscriber` |
+| **Virtual threads** | `spring.threads.virtual.enabled=true` — IO-bound WS fan-out and provider calls scale without pool tuning. | `application.yml` |
+| **Consumer lag metrics** | `kafka.consumer.lag{group}` / `kafka.consumer.lag.total` sampled via AdminClient for dashboards and autoscaling. | `KafkaConsumerLagMetrics` |
+
+New metrics: `notifications.digest.queued.total`, `notifications.digest.flushed.total`,
+`notifications.digest.pending`, `notifications.frequency-capped.total`,
+`provider.circuit-breaker.opens.total`, `template.rollout.diverted.total`,
+`kafka.consumer.lag`.
+
+- **Production:** `docker-compose.prod.yml` (only 80/443 exposed, ARM64-safe `apache/kafka` KRaft, resource limits, log rotation), `nginx.prod.conf` (TLS + HSTS), `scripts/deploy.sh` (health-gated, rollback), `scripts/smoke_test.sh`, `scripts/backup_postgres.sh` / `restore_postgres.sh`. Full guide: `docs/ORACLE_DEPLOYMENT.md`. Architecture: `docs/ARCHITECTURE.md`. Baseline audit: `docs/BASELINE_AUDIT.md`. Measured perf only: `docs/PERFORMANCE.md`.
 
 ## ✅ Testing
 
