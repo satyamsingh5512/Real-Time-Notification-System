@@ -114,6 +114,12 @@ public class Notification {
         this.updatedAt = sentAt;
     }
 
+    /** Batches this notification into the user's pending digest (email only). */
+    public void markQueuedForDigest() {
+        this.status = NotificationStatus.QUEUED_DIGEST;
+        this.updatedAt = Instant.now();
+    }
+
     public void markFailed(String errorMessage) {
         markFailed(errorMessage, true);
     }
