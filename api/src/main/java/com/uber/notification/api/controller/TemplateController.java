@@ -4,6 +4,8 @@ import com.uber.notification.api.dto.template.CreateTemplateRequest;
 import com.uber.notification.api.dto.template.TemplateResponse;
 import com.uber.notification.application.usecase.ManageNotificationTemplateUseCase;
 import com.uber.notification.domain.model.NotificationChannel;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -14,6 +16,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/v1/admin/templates")
 @PreAuthorize("hasRole('ADMIN')")
+@Tag(name = "Templates", description = "Admin: versioned templates with gradual rollout")
 public class TemplateController {
 
     private final ManageNotificationTemplateUseCase templateUseCase;
@@ -23,10 +26,12 @@ public class TemplateController {
     }
 
     @PostMapping
+    @Operation(summary = "Create a new template version (optionally with a gradual rollout percentage)")
     public TemplateResponse create(@Valid @RequestBody CreateTemplateRequest request) {
         return TemplateResponse.from(templateUseCase.createNewVersion(
                 request.code(), request.channel(), request.locale() != null ? request.locale() : "en-US",
-                request.subjectTemplate(), request.bodyTemplate()));
+                request.subjectTemplate(), request.bodyTemplate(),
+                request.trafficPct() != null ? request.trafficPct() : 100));
     }
 
     @GetMapping("/{code}")
