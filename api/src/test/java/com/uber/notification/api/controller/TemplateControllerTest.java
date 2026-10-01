@@ -39,6 +39,7 @@ import java.util.Set;
 import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -134,7 +135,7 @@ class TemplateControllerTest {
         when(jwtService.parseToken("admin-jwt")).thenReturn(
                 new JwtService.AuthenticatedPrincipal(adminId, "admin@example.com", Set.of(RoleName.ADMIN)));
         when(templateUseCase.createNewVersion(eq("ORDER_PLACED"), eq(NotificationChannel.EMAIL),
-                eq("en-US"), any(), any())).thenReturn(sampleTemplate());
+                eq("en-US"), any(), any(), anyInt())).thenReturn(sampleTemplate());
 
         mockMvc.perform(post("/api/v1/admin/templates")
                         .header("Authorization", "Bearer admin-jwt")
