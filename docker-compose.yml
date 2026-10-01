@@ -1,80 +1,115 @@
-version: "3.9"
+# Local development stack — ARM64-safe (Oracle Ampere compatible).
+# All images below ship linux/amd64 + linux/arm64 (apache/kafka KRaft replaces
+# the old confluentinc/cp-kafka + zookeeper pair, which was amd64-only).
+#
+# Fresh-clone start:
+#   cp .env.example .env
+#   docker compose up -d --build
+#   UI: http://localhost  API: http://localhost:8080  Swagger: http://localhost:8080/swagger-ui.html
+#
+# Brokerless backend (no Kafka needed):
+#   SPRING_PROFILES_ACTIVE=local ./gradlew :api:bootRun
+
+name: rtns
+
+networks:
+  rtns:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  redis_data:
 
 services:
   postgres:
     image: postgres:16-alpine
+    restart: unless-stopped
+    env_file:
+      - path: .env
+        required: false
     environment:
-      POSTGRES_DB: notification_platform
-      POSTGRES_USER: notification_user
-      POSTGRES_PASSWORD: changeme
-    ports:
-      - "5432:5432"
+      POSTGRES_DB: ${DB_NAME:-notification_platform}
+      POSTGRES_USER: ${DB_USER:-notification_user}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-changeme}
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    networks:
+      - rtns
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U notification_user -d notification_platform"]
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-notification_user} -d $${POSTGRES_DB:-notification_platform}"]
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 20s
 
   redis:
     image: redis:7-alpine
-    ports:
-      - "6379:6379"
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    networks:
+      - rtns
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 10s
 
-  zookeeper:
-    image: confluentinc/cp-zookeeper:7.6.1
-    environment:
-      ZOOKEEPER_CLIENT_PORT: 2181
-      ZOOKEEPER_TICK_TIME: 2000
-
+  # Single-node KRaft Kafka — no Zookeeper, ARM64-compatible.
   kafka:
-    image: confluentinc/cp-kafka:7.6.1
-    depends_on:
-      - zookeeper
-    ports:
-      - "9092:9092"
+    image: apache/kafka:3.7.0
+    restart: unless-stopped
     environment:
-      KAFKA_BROKER_ID: 1
-      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093,PLAINTEXT_HOST://:29092
       KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:29092
-      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,PLAINTEXT_HOST://0.0.0.0:29092
-      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
-      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      CLUSTER_ID: MkU3OEVBNTcwNTJENDM2Qk
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+    networks:
+      - rtns
     healthcheck:
-      test: ["CMD", "kafka-topics", "--bootstrap-server", "localhost:9092", "--list"]
-      interval: 10s
+      # cubkafka-ready equivalent for the Apache image: list topics via the broker listener.
+      test: ["CMD-SHELL", "cubkafka-ready -b kafka:9092 1 5 || kafka-topics.sh --bootstrap-server kafka:9092 --list"]
+      interval: 15s
       timeout: 10s
       retries: 10
+      start_period: 30s
 
   notification-platform:
     build:
       context: .
       dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file:
+      - path: .env
+        required: false
     ports:
       - "8080:8080"
     environment:
-      SPRING_PROFILES_ACTIVE: docker
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-docker}
       DB_HOST: postgres
       DB_PORT: 5432
-      DB_NAME: notification_platform
-      DB_USER: notification_user
-      DB_PASSWORD: changeme
+      DB_NAME: ${DB_NAME:-notification_platform}
+      DB_USER: ${DB_USER:-notification_user}
+      DB_PASSWORD: ${DB_PASSWORD:-changeme}
       REDIS_HOST: redis
       REDIS_PORT: 6379
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
-      JWT_SECRET: local-dev-secret-change-me-please-32-bytes-min
-      SES_FROM_ADDRESS: no-reply@example.com
-      AWS_REGION: us-east-1
-      # AWS credentials, Twilio, and Firebase secrets are intentionally left unset here;
-      # provide them via a local .env file (git-ignored) or K8s secrets in real deployments.
+      JWT_SECRET: ${JWT_SECRET:-local-dev-secret-change-me-please-32-bytes-min}
+      JWT_EXPIRATION_MS: ${JWT_EXPIRATION_MS:-3600000}
+      SES_FROM_ADDRESS: ${SES_FROM_ADDRESS:-no-reply@example.com}
+      AWS_REGION: ${AWS_REGION:-us-east-1}
+      RATE_LIMIT_PER_MINUTE: ${RATE_LIMIT_PER_MINUTE:-300}
+      NOTIFICATION_RETENTION_DAYS: ${NOTIFICATION_RETENTION_DAYS:-90}
     depends_on:
       postgres:
         condition: service_healthy
@@ -82,17 +117,31 @@ services:
         condition: service_healthy
       kafka:
         condition: service_healthy
+    networks:
+      - rtns
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:8080/actuator/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
 
-  # Edge proxy + React SPA (Notion-styled UI in frontend/). Single entrypoint: http://localhost
+  # Edge proxy + React SPA. Single entrypoint: http://localhost
   nginx:
     build:
       context: .
       dockerfile: frontend/Dockerfile
+    restart: unless-stopped
     ports:
       - "80:80"
     depends_on:
       notification-platform:
         condition: service_started
-
-volumes:
-  postgres_data:
+    networks:
+      - rtns
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
