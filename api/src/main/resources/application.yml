@@ -27,10 +27,17 @@ spring:
       password: ${REDIS_PASSWORD:}
   kafka:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+  threads:
+    # Java 21 virtual threads: WebSocket fan-out and provider I/O are IO-bound and
+    # blocking, so virtual threads scale connection count without pool tuning
+    # (Spring docs: task-execution-and-scheduling -> virtual-threads).
+    virtual:
+      enabled: ${VIRTUAL_THREADS_ENABLED:true}
 
 server:
   port: 8080
   shutdown: graceful
+  forward-headers-strategy: framework
 
 management:
   endpoints:
@@ -48,7 +55,7 @@ management:
 security:
   jwt:
     secret: ${JWT_SECRET:CHANGE_ME_IN_PRODUCTION_use_a_32+_byte_random_secret}
-    expiration-ms: 3600000
+    expiration-ms: ${JWT_EXPIRATION_MS:3600000}
 
 notification:
   email:
@@ -70,6 +77,21 @@ notification:
     enabled: ${NOTIFICATION_RETENTION_ENABLED:true}
     days: ${NOTIFICATION_RETENTION_DAYS:90}
     cron: ${NOTIFICATION_RETENTION_CRON:0 0 2 * * *}
+  digest:
+    # Slack/SuprSend-style batching: low-value email is batched per user and
+    # flushed as one grouped email. Cadence itself is per-user (user_preferences.digest_cadence).
+    enabled: ${DIGEST_ENABLED:true}
+    cron: ${DIGEST_CRON:0 15 * * * *}
+  delivery:
+    circuit-breaker:
+      # Opens after N consecutive retryable provider failures, stays open for the cooldown.
+      failure-threshold: ${CIRCUIT_BREAKER_FAILURE_THRESHOLD:5}
+      open-cooldown-seconds: ${CIRCUIT_BREAKER_OPEN_COOLDOWN_SECONDS:60}
+  kafka:
+    lag:
+      # Consumer-lag gauges for dashboards/autoscaling (kafka.consumer.lag{group=...}).
+      monitored-groups: ${KAFKA_LAG_MONITORED_GROUPS:notification-platform-events}
+      poll-interval-ms: ${KAFKA_LAG_POLL_INTERVAL_MS:30000}
   providers:
     # Informational flag; actual provider selection is via the Spring `local` profile
     # (SPRING_PROFILES_ACTIVE=local activates MockEmail/Sms/Push providers).
@@ -77,6 +99,7 @@ notification:
   rate-limit:
     enabled: ${RATE_LIMIT_ENABLED:true}
     requests-per-minute: ${RATE_LIMIT_PER_MINUTE:300}
+    auth-requests-per-minute: ${AUTH_RATE_LIMIT_PER_MINUTE:30}
 
 springdoc:
   swagger-ui:
