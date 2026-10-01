@@ -13,9 +13,6 @@ permissions:
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
-    services:
-      docker:
-        image: docker:dind
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -42,6 +39,12 @@ jobs:
       - name: Compile
         run: ./gradlew compileJava compileTestJava --no-daemon
 
+      - name: Frontend typecheck + build
+        run: |
+          cd frontend
+          npm ci --no-audit --no-fund
+          npm run build
+
       - name: Run unit + integration tests
         run: ./gradlew test --no-daemon
         env:
@@ -65,6 +68,11 @@ jobs:
           name: coverage-reports
           path: "**/build/reports/jacoco"
           retention-days: 7
+
+      - name: Validate compose files
+        run: |
+          docker compose -f docker-compose.yml config -q
+          docker compose -f docker-compose.prod.yml config -q
 
       - name: Build bootJar
         run: ./gradlew :api:bootJar -x test --no-daemon
@@ -93,11 +101,15 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      # ARM64-compatible: Oracle Ampere is aarch64. QEMU+Buildx builds both arches
+      # from the same Dockerfile (all base images are multi-arch; Kafka is now
+      # apache/kafka KRaft instead of amd64-only Confluent).
       - name: Build and push image
         uses: docker/build-push-action@v6
         with:
           context: .
           push: true
+          platforms: linux/amd64,linux/arm64
           tags: |
             ghcr.io/${{ github.repository }}:latest
             ghcr.io/${{ github.repository }}:${{ github.sha }}
@@ -128,19 +140,20 @@ jobs:
           context: .
           file: frontend/Dockerfile
           push: true
+          platforms: linux/amd64,linux/arm64
           tags: |
             ghcr.io/${{ github.repository }}-frontend:latest
             ghcr.io/${{ github.repository }}-frontend:${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-  deploy-to-vps:
+  deploy-to-oracle:
     needs: [docker-build-push, docker-build-push-frontend]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
     environment: production
     steps:
-      - name: Deploy over SSH
+      - name: Deploy over SSH (zero-broken-deploy with rollback)
         uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.VPS_HOST }}
@@ -150,9 +163,7 @@ jobs:
           script: |
             set -e
             cd ${{ secrets.VPS_DEPLOY_DIR || '/opt/rtns' }}
-            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
-            docker compose pull notification-platform nginx
-            docker compose up -d
-            docker image prune -f
-            sleep 15
-            curl -fsS http://localhost/actuator/health || curl -fsS http://localhost:8080/actuator/health
+            git pull --ff-only || true
+            chmod +x scripts/*.sh
+            ./scripts/deploy.sh
+            ./scripts/smoke_test.sh http://localhost
