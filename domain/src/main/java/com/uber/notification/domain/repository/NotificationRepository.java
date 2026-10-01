@@ -36,6 +36,12 @@ public interface NotificationRepository {
 
     long countByStatus(NotificationStatus status);
 
+    /** Push sends to a user since an instant (frequency-cap window probe). */
+    long countPushesSentSince(java.util.UUID userId, Instant since);
+
+    /** Most recent push send to a user (minimum-gap probe). Empty when never sent. */
+    java.util.Optional<Instant> findLastPushSentAt(java.util.UUID userId);
+
     long countTotal();
 
     long countCreatedSince(Instant since);
