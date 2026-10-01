@@ -39,13 +39,16 @@ public class RateLimitFilter extends OncePerRequestFilter {
     private final CachePort cachePort;
     private final boolean enabled;
     private final int requestsPerMinute;
+    private final int authRequestsPerMinute;
 
     public RateLimitFilter(@Autowired(required = false) CachePort cachePort,
                            @Value("${notification.rate-limit.enabled:true}") boolean enabled,
-                           @Value("${notification.rate-limit.requests-per-minute:300}") int requestsPerMinute) {
+                           @Value("${notification.rate-limit.requests-per-minute:300}") int requestsPerMinute,
+                           @Value("${notification.rate-limit.auth-requests-per-minute:30}") int authRequestsPerMinute) {
         this.cachePort = cachePort;
         this.enabled = enabled;
         this.requestsPerMinute = requestsPerMinute;
+        this.authRequestsPerMinute = authRequestsPerMinute;
     }
 
     @Override
@@ -56,7 +59,8 @@ public class RateLimitFilter extends OncePerRequestFilter {
         String path = request.getRequestURI();
         return !path.startsWith("/api/v1/notifications")
                 && !path.startsWith("/api/v1/internal")
-                && !path.startsWith("/api/v1/admin/broadcast");
+                && !path.startsWith("/api/v1/admin/broadcast")
+                && !path.startsWith("/api/v1/auth/");
     }
 
     @Override
@@ -66,9 +70,10 @@ public class RateLimitFilter extends OncePerRequestFilter {
         String identity = identity(request);
         String window = String.valueOf(Instant.now().truncatedTo(ChronoUnit.MINUTES).getEpochSecond());
         String key = "ratelimit:" + request.getRequestURI() + ":" + identity + ":" + window;
+        int budget = request.getRequestURI().startsWith("/api/v1/auth/") ? authRequestsPerMinute : requestsPerMinute;
         try {
             long count = cachePort.increment(key, 1, WINDOW);
-            if (count > requestsPerMinute) {
+            if (count > budget) {
                 response.setStatus(429); // 429 Too Many Requests
                 response.setHeader("Retry-After", "60");
                 response.setContentType("application/json");
