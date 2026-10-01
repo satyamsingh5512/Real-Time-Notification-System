@@ -20,10 +20,18 @@ public class NotificationTemplate {
     private String locale;                  // e.g. "en-US"
     private boolean active;
     private final Instant createdAt;
+    /** Gradual rollout gate (DoorDash pattern): % of users rendering this version (0-100). */
+    private int trafficPct = 100;
 
     public NotificationTemplate(UUID id, String code, NotificationChannel channel, int version,
                                  String subjectTemplate, String bodyTemplate, String locale,
                                  boolean active, Instant createdAt) {
+        this(id, code, channel, version, subjectTemplate, bodyTemplate, locale, active, createdAt, 100);
+    }
+
+    public NotificationTemplate(UUID id, String code, NotificationChannel channel, int version,
+                                 String subjectTemplate, String bodyTemplate, String locale,
+                                 boolean active, Instant createdAt, int trafficPct) {
         this.id = Objects.requireNonNull(id);
         this.code = Objects.requireNonNull(code);
         this.channel = Objects.requireNonNull(channel);
@@ -33,6 +41,7 @@ public class NotificationTemplate {
         this.locale = locale != null ? locale : "en-US";
         this.active = active;
         this.createdAt = createdAt;
+        this.trafficPct = Math.min(100, Math.max(0, trafficPct));
     }
 
     public UUID getId() {
@@ -73,5 +82,25 @@ public class NotificationTemplate {
 
     public void deactivate() {
         this.active = false;
+    }
+
+    public int getTrafficPct() {
+        return trafficPct;
+    }
+
+    public void setTrafficPct(int trafficPct) {
+        this.trafficPct = Math.min(100, Math.max(0, trafficPct));
+    }
+
+    /**
+     * Stable rollout bucket for a user: same user always resolves to the same
+     * template version for a given code (no flip-flopping between renders).
+     */
+    public boolean servesBucket(int bucket) {
+        return bucket < trafficPct;
+    }
+
+    public static int bucketFor(java.util.UUID userId, String code) {
+        return Math.abs((userId.toString() + "|" + code).hashCode()) % 100;
     }
 }
