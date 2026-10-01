@@ -24,7 +24,10 @@ RUN ./gradlew :api:bootJar -x test --no-daemon
 
 FROM eclipse-temurin:21-jre-alpine AS runtime
 
-RUN addgroup -S notification && adduser -S notification -G notification
+# wget is required for the HEALTHCHECK below (JRE image ships without it).
+# All base images here are multi-arch (amd64 + arm64) for Oracle Ampere.
+RUN apk add --no-cache wget && \
+    addgroup -S notification && adduser -S notification -G notification
 WORKDIR /app
 
 COPY --from=build /workspace/api/build/libs/notification-platform.jar app.jar
