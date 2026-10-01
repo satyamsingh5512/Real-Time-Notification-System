@@ -1,11 +1,17 @@
+# Docker Compose profile: resolves hosts from DB_*/REDIS_*/KAFKA_* envs injected by
+# docker-compose.yml (which sets DB_HOST=postgres etc.). No hardcoded credentials here.
 spring:
   config:
     activate:
       on-profile: docker
   datasource:
-    url: jdbc:postgresql://postgres:5432/notification_platform
+    url: jdbc:postgresql://${DB_HOST:postgres}:${DB_PORT:5432}/${DB_NAME:notification_platform}
+    username: ${DB_USER:notification_user}
+    password: ${DB_PASSWORD:changeme}
   data:
     redis:
-      host: redis
+      host: ${REDIS_HOST:redis}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
   kafka:
-    bootstrap-servers: kafka:9092
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:kafka:9092}
