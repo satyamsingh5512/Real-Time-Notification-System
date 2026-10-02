@@ -22,3 +22,20 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Playwright — everything below is a generated artifact.
+#
+# Screenshot baselines (tests/visual/__screenshots__) are NOT tracked. They are ~180 PNGs
+# (~29 MB) that `npm run test:visual:update` regenerates locally, and they were previously
+# untracked-but-unignored, so a plain `git add -A` would have committed 29 MB of rasterised
+# fonts. They are also not stable enough to gate CI on: font rasterisation differs between
+# runner images, which is why the PR workflow runs assertions only (--grep-invert on the
+# screenshot specs) and the screenshot job is opt-in via workflow_dispatch.
+#
+# To review a visual diff: run `npm run test:visual:update`, inspect the PNGs locally, and
+# discard them. Do not commit them.
+tests/visual/__screenshots__
+test-results
+playwright-report
+blob-report
+playwright/.cache
