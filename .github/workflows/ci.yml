@@ -5,6 +5,7 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -39,11 +40,36 @@ jobs:
       - name: Compile
         run: ./gradlew compileJava compileTestJava --no-daemon
 
-      - name: Frontend typecheck + build
+      - name: Frontend install
         run: |
           cd frontend
           npm ci --no-audit --no-fund
-          npm run build
+
+      - name: Frontend lint
+        run: cd frontend && npm run lint
+
+      - name: Frontend typecheck + build
+        run: cd frontend && npm run build
+
+      - name: Install Playwright Chromium
+        run: cd frontend && npx playwright install --with-deps chromium
+
+      # Assertions only: layout overflow, keyboard/focus behaviour, console errors and
+      # WCAG AA contrast over the shader. Screenshot comparison is a separate, opt-in
+      # job below, because baselines are only stable on a pinned runner image.
+      - name: Frontend behaviour + accessibility assertions
+        run: |
+          cd frontend
+          npx playwright test \
+            --grep-invert "landing —|login$|register$|dashboard —|dashboard$|notification centre|delivery preferences|^.* settings|system status|admin console|notification drawer|command palette —|command palette$|mass email — audience preview|inbox — dark|nothing delivered|API unavailable|hero viewport only"
+
+      - name: Upload visual report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-visual-report
+          path: frontend/test-results/visual-report
+          retention-days: 7
 
       - name: Run unit + integration tests
         run: ./gradlew test --no-daemon
@@ -83,8 +109,49 @@ jobs:
           name: notification-platform-jar
           path: api/build/libs/notification-platform.jar
 
-  docker-build-push:
+  # Opt in from the Actions tab ("Re-run with workflow_dispatch") or change the trigger
+  # once the baselines are trusted on a pinned runner image. Font rasterisation differs
+  # between runner images, so pixel diffs are not meaningful without pinning.
+  visual-regression:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Frontend install
+        run: cd frontend && npm ci --no-audit --no-fund
+
+      - name: Install Playwright Chromium
+        run: cd frontend && npx playwright install --with-deps chromium
+
+      - name: Visual regression
+        run: cd frontend && npm run test:visual
+
+      - name: Upload diff artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: visual-diff
+          path: |
+            frontend/test-results
+            frontend/tests/visual/__screenshots__
+          retention-days: 7
+
+  delivery-verification:
     needs: build-and-test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Asserts CSP + security headers on every SPA route, immutable asset caching,
+      # SPA fallback, the backend health proxy, and that Node is absent at runtime.
+      - name: Verify nginx delivery guarantees
+        run: chmod +x scripts/*.sh && ./scripts/verify_delivery.sh
+
+  docker-build-push:
+    needs: [build-and-test, delivery-verification]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
@@ -117,7 +184,7 @@ jobs:
           cache-to: type=gha,mode=max
 
   docker-build-push-frontend:
-    needs: build-and-test
+    needs: [build-and-test, delivery-verification]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
