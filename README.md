@@ -309,3 +309,41 @@ New metrics: `notifications.digest.queued.total`, `notifications.digest.flushed.
 ```
 
 Requires JDK 21 to run Gradle and a Docker daemon for the Testcontainers suites.
+
+### Frontend
+
+```bash
+cd frontend
+npm run build             # tsc -b (typecheck gate) + production bundle
+npm run lint              # oxlint
+npm run test:visual       # 235 checks: 168 screenshot baselines + behaviour/a11y assertions
+npm run test:visual:update   # regenerate baselines — review the diff before committing
+
+cd .. && ./scripts/verify_delivery.sh   # 22 delivery-layer checks against a real nginx
+```
+
+The visual suite covers 21 page/state scenarios across all 8 required viewports
+(390 → 1920), in both themes, plus empty and error states. Alongside the screenshots it
+*asserts* no horizontal overflow, keyboard and focus-trap behaviour, zero console
+errors, WCAG AA text contrast measured over the WebGL shader, and that no request
+leaves the origin.
+
+`verify_delivery.sh` covers what nginx owns: CSP and security headers on every SPA
+route, immutable asset caching, the SPA fallback, the backend health proxy, and the
+absence of Node in the runtime image.
+
+### Documentation
+
+> **Building new UI?** Start with [`DESIGN.md`](DESIGN.md) — it is the self-contained
+> replication spec (tokens, fonts, component metrics, motion, a11y). Hand it to an agent and
+> it can match the existing design without reading the codebase.
+
+| Document | Contents |
+|---|---|
+| [`DESIGN.md`](DESIGN.md) | **Authoritative UI replication spec** — paste-ready token block, type scale, component metrics, motion rules, accessibility bar. Hand this to an agent to reproduce the UI |
+| [`docs/UI-UX.md`](docs/UI-UX.md) | Design system rationale, component inventory, motion guidelines, accessibility strategy, deliberate omissions |
+| [`docs/FRONTEND_ARCHITECTURE.md`](docs/FRONTEND_ARCHITECTURE.md) | Structure, state, API contract, build/delivery pipeline, CSP, performance |
+| [`docs/VISUAL_REGRESSION.md`](docs/VISUAL_REGRESSION.md) | How visual regression works, how to run it, what it cannot catch |
+| [`docs/VISUAL_QA_REPORT.md`](docs/VISUAL_QA_REPORT.md) | Page × viewport results, every defect found and fixed, acceptance checklist |
+| [`docs/ORACLE_DEPLOYMENT.md`](docs/ORACLE_DEPLOYMENT.md) | Deployment and operations on the Oracle Free Tier VM |
+| [`docs/EMAIL_SERVICE_INTEGRATION.md`](docs/EMAIL_SERVICE_INTEGRATION.md) | External email service as the EMAIL transport, mass-email campaigns, the daily-quota ceiling, and the upstream auth blocker |
