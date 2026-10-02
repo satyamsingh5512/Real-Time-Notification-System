@@ -121,6 +121,24 @@ public class DeliverNotificationUseCase {
     }
 
     private void renderTemplate(Notification notification) {
+        /*
+         * Respect copy the caller already rendered.
+         *
+         * Admin-authored content (admin broadcasts, mass-email campaigns) is rendered by
+         * the use case that owns it and set on the row *before* delivery. Re-resolving it
+         * from a template row here silently discarded it: with no template the row fell
+         * back to `payload["message"]`, so an admin's subject and body never reached the
+         * provider. With a template present the admin's copy was replaced by the
+         * template's — which is worse, because the admin saw their text in the UI and
+         * something else went out.
+         *
+         * Only event-driven notifications, whose copy genuinely lives in
+         * notification_templates, arrive unrendered.
+         */
+        if (notification.getRenderedSubject() != null || notification.getRenderedBody() != null) {
+            return;
+        }
+
         Optional<NotificationTemplate> template = rolloutSelector != null
                 ? rolloutSelector.select(notification.getTemplateCode(), notification.getChannel(),
                         "en-US", notification.getUserId())
