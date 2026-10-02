@@ -59,8 +59,24 @@ security:
 
 notification:
   email:
+    # AWS SES, used when notification.email-service.enabled is false (the default).
     from-address: ${SES_FROM_ADDRESS:no-reply@example.com}
     aws-region: ${AWS_REGION:us-east-1}
+  # External email-service microservice (github.com/satyamsingh5512/email-service) used
+  # as the EMAIL delivery transport. Disabled by default; enabling it makes it the
+  # primary EMAIL provider and leaves SES unused. See docs/EMAIL_SERVICE_INTEGRATION.md.
+  email-service:
+    enabled: ${EMAIL_SERVICE_ENABLED:false}
+    base-url: ${EMAIL_SERVICE_URL:http://email-service:3001}
+    api-key: ${EMAIL_SERVICE_API_KEY:}
+    connect-timeout-ms: ${EMAIL_SERVICE_CONNECT_TIMEOUT_MS:3000}
+    read-timeout-ms: ${EMAIL_SERVICE_READ_TIMEOUT_MS:10000}
+    # Mass-email campaigns are OFF by default: highest abuse risk in the product, and the
+    # upstream service enforces a hardcoded 100 sends/day quota.
+    mass-mail-enabled: ${EMAIL_SERVICE_MASS_MAIL_ENABLED:false}
+    mass-mail-max-recipients: ${EMAIL_SERVICE_MASS_MAIL_MAX_RECIPIENTS:100}
+    # Mirrors the upstream constant so the pre-flight quota warning is accurate.
+    daily-quota: ${EMAIL_SERVICE_DAILY_QUOTA:100}
   sms:
     from-number: ${TWILIO_FROM_NUMBER:+10000000000}
     twilio-account-sid: ${TWILIO_ACCOUNT_SID:}
