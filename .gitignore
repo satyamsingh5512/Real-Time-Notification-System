@@ -8,3 +8,17 @@ out/
 .env
 *.log
 firebase-service-account.json
+
+# Ad-hoc MCP browser scratch output (superseded by frontend/tests/visual/)
+.playwright-mcp/
+
+# Markdown documentation is local-only. Only the root README.md is tracked.
+*.md
+!README.md
+
+# NOTE: gitignore has NO effect on files that are already tracked. These four are still
+# in the index and will keep committing until explicitly untracked:
+#     git rm --cached docs/DIAGRAMS.md docs/SYSTEM_ARCHITECTURE.md \
+#              frontend/DESIGN.md frontend/README.md
+# Also note that the tracked README.md links to DESIGN.md and seven docs/*.md files that
+# are NOT tracked, so a fresh clone currently gets a README with 7 dead links.
