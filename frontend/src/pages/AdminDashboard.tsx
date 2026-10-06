@@ -13,7 +13,7 @@ import {
 } from 'lucide-react';
 import { adminApi } from '@/services/api';
 import { normalizeError, type NormalizedError } from '@/services/errors';
-import { useRealtime } from '@/hooks/useRealtime';
+import { useRealtime } from '@/stores/realtime';
 import type { AdminStats, NotificationPriority, TemplateItem } from '@/types/api';
 import { MetricCard, PageHeader, RevealGroup } from '@/components/layout/primitives';
 import { Badge } from '@/components/ui/badge';
@@ -28,8 +28,18 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { ErrorState } from '@/components/ui/error-state';
-import { Input } from '@/components/ui/input';
-import { Skeleton, SkeletonStat } from '@/components/ui/skeleton';
+import { Input, Textarea } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Progress } from '@/components/ui/progress';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { AdminSkeleton } from '@/components/ui/skeletons';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
   Table,
   TableBody,
@@ -40,6 +50,10 @@ import {
 } from '@/components/ui/table';
 import { toast } from '@/components/ui/toaster';
 import { RelativeTime } from '@/components/notifications/NotificationRow';
+import { MassEmailPanel } from '@/components/admin/MassEmailPanel';
+
+/** Mirrors NotificationChannel on the wire. Enum binding is case-sensitive server-side. */
+const CHANNELS = ['EMAIL', 'SMS', 'PUSH', 'IN_APP', 'WEBSOCKET'] as const;
 
 /**
  * Admin console (ROLE_ADMIN only — enforced by the server; this route is additionally
@@ -84,6 +98,10 @@ export function AdminDashboard() {
         }
       />
 
+      {loading && !stats ? (
+        <AdminSkeleton />
+      ) : (
+      <>
       {error ? (
         <div className="mb-5">
           <ErrorState
@@ -92,17 +110,15 @@ export function AdminDashboard() {
             onRetry={() => void load()}
             action={
               error.kind === 'forbidden'
-                ? { label: 'Return to dashboard', onClick: () => window.location.assign('/') }
+                ? { label: 'Return to dashboard', onClick: () => window.location.assign('/dashboard') }
                 : undefined
             }
           />
         </div>
       ) : null}
 
+      {stats ? (
       <RevealGroup className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {loading || !stats ? (
-          Array.from({ length: 4 }).map((_, index) => <SkeletonStat key={index} />)
-        ) : (
           <>
             <MetricCard label="Total notifications" value={stats.totalNotifications} icon={<BarChart3 />} />
             <MetricCard label="Registered users" value={stats.totalUsers} icon={<Users />} />
@@ -119,12 +135,18 @@ export function AdminDashboard() {
               tone="warning"
             />
           </>
-        )}
       </RevealGroup>
+      ) : null}
 
       <div className="mt-6 grid gap-4 lg:grid-cols-2">
         <BroadcastPanel connected={connected} />
         <TemplateRolloutPanel />
+      </div>
+
+      {/* Mass email sits on its own row: it is a destructive, high-volume action and
+          must not share visual weight with the two panels above it. */}
+      <div className="mt-4">
+        <MassEmailPanel />
       </div>
 
       {stats ? (
@@ -137,17 +159,11 @@ export function AdminDashboard() {
           </CardHeader>
           <CardContent>
             <div className="flex items-center gap-4">
-              <div className="h-2 flex-1 overflow-hidden rounded-full bg-muted">
-                <div
-                  className="h-full rounded-full bg-primary transition-[width] duration-500 ease-out-quart"
-                  style={{ width: `${Math.max(0, Math.min(100, stats.readRatePercentage))}%` }}
-                  role="progressbar"
-                  aria-valuenow={Math.round(stats.readRatePercentage)}
-                  aria-valuemin={0}
-                  aria-valuemax={100}
-                  aria-label="Read rate percentage"
-                />
-              </div>
+              <Progress
+                value={stats.readRatePercentage}
+                label="Read rate percentage"
+                className="flex-1"
+              />
               <span className="w-14 text-right text-sm font-semibold tabular">
                 {stats.readRatePercentage.toFixed(1)}%
               </span>
@@ -155,6 +171,8 @@ export function AdminDashboard() {
           </CardContent>
         </Card>
       ) : null}
+      </>
+      )}
     </>
   );
 }
@@ -222,9 +240,9 @@ function BroadcastPanel({ connected }: { connected: boolean }) {
       <CardContent className="space-y-4">
         {error ? <ErrorState kind={error.kind} message={error.message} compact /> : null}
         <div className="space-y-1.5">
-          <label htmlFor="broadcast-title" className="text-sm font-medium">
+          <Label htmlFor="broadcast-title">
             Title
-          </label>
+          </Label>
           <Input
             id="broadcast-title"
             placeholder="Scheduled maintenance tonight"
@@ -234,17 +252,16 @@ function BroadcastPanel({ connected }: { connected: boolean }) {
           />
         </div>
         <div className="space-y-1.5">
-          <label htmlFor="broadcast-message" className="text-sm font-medium">
+          <Label htmlFor="broadcast-message">
             Message
-          </label>
-          <textarea
+          </Label>
+          <Textarea
             id="broadcast-message"
             rows={3}
             placeholder="Delivery may be delayed between 22:00 and 23:00 UTC."
             value={message}
             onChange={(event) => setMessage(event.target.value)}
             disabled={submitting}
-            className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:opacity-50"
           />
         </div>
         <fieldset disabled={submitting}>
@@ -392,9 +409,9 @@ function TemplateRolloutPanel() {
 
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="space-y-1.5">
-            <label htmlFor="template-code" className="text-sm font-medium">
+            <Label htmlFor="template-code">
               Template code
-            </label>
+            </Label>
             <Input
               id="template-code"
               value={code}
@@ -404,29 +421,28 @@ function TemplateRolloutPanel() {
             />
           </div>
           <div className="space-y-1.5">
-            <label htmlFor="template-channel" className="text-sm font-medium">
+            <Label htmlFor="template-channel">
               Channel
-            </label>
-            <select
-              id="template-channel"
-              value={channel}
-              onChange={(event) => setChannel(event.target.value)}
-              disabled={submitting}
-              className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
-            >
-              {['EMAIL', 'SMS', 'PUSH', 'IN_APP', 'WEBSOCKET'].map((option) => (
-                <option key={option} value={option}>
-                  {option}
-                </option>
-              ))}
-            </select>
+            </Label>
+            <Select value={channel} onValueChange={setChannel} disabled={submitting}>
+              <SelectTrigger id="template-channel" aria-label="Channel">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {CHANNELS.map((option) => (
+                  <SelectItem key={option} value={option}>
+                    {option}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         </div>
 
         <div className="flex items-center gap-3">
-          <label htmlFor="template-traffic" className="shrink-0 text-sm font-medium">
+          <Label htmlFor="template-traffic" className="shrink-0">
             Rollout
-          </label>
+          </Label>
           <input
             id="template-traffic"
             type="range"
@@ -436,7 +452,7 @@ function TemplateRolloutPanel() {
             value={trafficPct}
             onChange={(event) => setTrafficPct(Number(event.target.value))}
             disabled={submitting}
-            className="h-2 flex-1 cursor-pointer appearance-none rounded-full bg-muted accent-[hsl(var(--primary))]"
+            className="h-2 flex-1 cursor-pointer appearance-none rounded-full bg-muted accent-primary"
           />
           <span className="flex w-20 items-center justify-end gap-1 text-sm font-medium tabular">
             <Percent className="size-3" aria-hidden="true" />
@@ -514,9 +530,9 @@ function TemplateRolloutPanel() {
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-1.5">
-              <label htmlFor="template-subject" className="text-sm font-medium">
+              <Label htmlFor="template-subject">
                 Subject <span className="font-normal text-muted-foreground">(email only)</span>
-              </label>
+              </Label>
               <Input
                 id="template-subject"
                 value={subject}
@@ -526,17 +542,16 @@ function TemplateRolloutPanel() {
               />
             </div>
             <div className="space-y-1.5">
-              <label htmlFor="template-body" className="text-sm font-medium">
+              <Label htmlFor="template-body">
                 Body
-              </label>
-              <textarea
+              </Label>
+              <Textarea
                 id="template-body"
                 rows={4}
                 value={body}
                 onChange={(event) => setBody(event.target.value)}
                 disabled={submitting}
                 placeholder="Thanks! Your order {{orderId}} for {{amount}} is being prepared."
-                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
               />
             </div>
             <p className="flex items-start gap-2 rounded-lg border border-warning/40 bg-warning/10 p-2.5 text-xs text-warning-foreground dark:text-foreground">
