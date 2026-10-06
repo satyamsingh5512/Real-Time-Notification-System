@@ -39,12 +39,21 @@ public class NotificationTemplateJpaEntity {
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
+    @Column(name = "traffic_pct", nullable = false)
+    private int trafficPct = 100;
+
     protected NotificationTemplateJpaEntity() {
     }
 
     public NotificationTemplateJpaEntity(UUID id, String code, com.uber.notification.domain.model.NotificationChannel channel,
                                           int version, String subjectTemplate, String bodyTemplate, String locale,
                                           boolean active, Instant createdAt) {
+        this(id, code, channel, version, subjectTemplate, bodyTemplate, locale, active, createdAt, 100);
+    }
+
+    public NotificationTemplateJpaEntity(UUID id, String code, com.uber.notification.domain.model.NotificationChannel channel,
+                                          int version, String subjectTemplate, String bodyTemplate, String locale,
+                                          boolean active, Instant createdAt, int trafficPct) {
         this.id = id;
         this.code = code;
         this.channel = channel;
@@ -54,6 +63,7 @@ public class NotificationTemplateJpaEntity {
         this.locale = locale;
         this.active = active;
         this.createdAt = createdAt;
+        this.trafficPct = trafficPct;
     }
 
     public UUID getId() { return id; }
@@ -65,4 +75,5 @@ public class NotificationTemplateJpaEntity {
     public String getLocale() { return locale; }
     public boolean isActive() { return active; }
     public Instant getCreatedAt() { return createdAt; }
+    public int getTrafficPct() { return trafficPct; }
 }
