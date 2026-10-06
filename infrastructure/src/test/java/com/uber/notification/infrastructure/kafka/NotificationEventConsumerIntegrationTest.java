@@ -34,6 +34,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
 /**
@@ -108,8 +109,10 @@ class NotificationEventConsumerIntegrationTest {
                 "Dup", Set.of(RoleName.USER), true, Instant.now(), Instant.now()));
 
         String eventId = UUID.randomUUID().toString();
+        // amount is required by the ORDER_PLACED schema (see EventMessageValidator);
+        // omitting it would quarantine the payload as a poison pill instead of ingesting it.
         EventMessage event = new EventMessage(eventId, EventType.ORDER_PLACED,
-                user.getId().toString(), Map.of("orderId", "ORD-2"), Instant.now());
+                user.getId().toString(), Map.of("orderId", "ORD-2", "amount", "499"), Instant.now());
         String payload = objectMapper.writeValueAsString(event);
 
         consumer.onOrderPlaced(payload);
@@ -123,5 +126,21 @@ class NotificationEventConsumerIntegrationTest {
         // Must never propagate: Spring Kafka would otherwise retry a poison pill forever.
         org.junit.jupiter.api.Assertions.assertDoesNotThrow(
                 () -> consumer.onOrderPlaced("{not valid json"));
+    }
+
+    @Test
+    void schemaInvalidPayloadIsQuarantinedWithoutPersisting() throws Exception {
+        // Valid JSON but missing the required `amount` attribute for ORDER_PLACED:
+        // must be rejected by validation (no partial fan-out), not persisted.
+        User user = userRepository.save(new User(UUID.randomUUID(), "invalid@example.com", "hash",
+                "Invalid", Set.of(RoleName.USER), true, Instant.now(), Instant.now()));
+
+        EventMessage event = new EventMessage(UUID.randomUUID().toString(), EventType.ORDER_PLACED,
+                user.getId().toString(), Map.of("orderId", "ORD-9"), Instant.now());
+
+        consumer.onOrderPlaced(objectMapper.writeValueAsString(event));
+
+        assertThat(notificationRepository.findHistoryForUser(user.getId(), false, 0, 20)).isEmpty();
+        verify(deliverNotificationUseCase, never()).execute(any());
     }
 }
