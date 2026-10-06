@@ -110,6 +110,16 @@ public class NotificationRepositoryAdapter implements NotificationRepository {
     }
 
     @Override
+    public long countPushesSentSince(UUID userId, Instant since) {
+        return jpaRepository.countPushesSentSince(userId, since);
+    }
+
+    @Override
+    public Optional<Instant> findLastPushSentAt(UUID userId) {
+        return jpaRepository.findLastPushSentAt(userId);
+    }
+
+    @Override
     public List<UUID> findIdsCreatedBefore(Instant cutoff, int limit) {
         return jpaRepository.findIdsCreatedBefore(cutoff, PageRequest.of(0, limit));
     }
