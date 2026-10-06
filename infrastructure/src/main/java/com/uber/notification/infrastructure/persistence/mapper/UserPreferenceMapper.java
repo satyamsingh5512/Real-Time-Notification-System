@@ -15,7 +15,9 @@ public final class UserPreferenceMapper {
     public static UserPreferenceJpaEntity toEntity(UserPreference p) {
         return new UserPreferenceJpaEntity(
                 p.getId(), p.getUserId(), p.getEventType(), p.getChannelOptIn(),
-                p.isQuietHoursEnabled(), p.getQuietHoursStart(), p.getQuietHoursEnd(), p.getUpdatedAt()
+                p.isQuietHoursEnabled(), p.getQuietHoursStart(), p.getQuietHoursEnd(), p.getUpdatedAt(),
+                p.getIntent(), p.isPushEnabled(), p.getDigestCadence(),
+                p.getMaxPushesPerDay(), p.getMinHoursBetweenPushes()
         );
     }
 
@@ -25,7 +27,9 @@ public final class UserPreferenceMapper {
                 : new EnumMap<>(NotificationChannel.class);
         return new UserPreference(
                 e.getId(), e.getUserId(), e.getEventType(), optIn,
-                e.isQuietHoursEnabled(), e.getQuietHoursStart(), e.getQuietHoursEnd(), e.getUpdatedAt()
+                e.isQuietHoursEnabled(), e.getQuietHoursStart(), e.getQuietHoursEnd(), e.getUpdatedAt(),
+                e.getIntent(), e.isPushEnabled(), e.getDigestCadence(),
+                e.getMaxPushesPerDay(), e.getMinHoursBetweenPushes()
         );
     }
 }
