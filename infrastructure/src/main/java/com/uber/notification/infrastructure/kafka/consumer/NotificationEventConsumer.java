@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.uber.notification.application.event.DomainEvent;
 import com.uber.notification.application.usecase.DeliverNotificationUseCase;
 import com.uber.notification.application.usecase.ProcessIncomingEventUseCase;
+import com.uber.notification.application.validation.EventMessageValidator;
 import com.uber.notification.domain.model.Notification;
 import com.uber.notification.infrastructure.kafka.KafkaTopics;
 import com.uber.notification.infrastructure.kafka.dto.EventMessage;
@@ -94,6 +95,14 @@ public class NotificationEventConsumer {
     private void handle(String sourceTopic, String payload) {
         try {
             EventMessage message = objectMapper.readValue(payload, EventMessage.class);
+            // Schema validation BEFORE fan-out: a malformed event is quarantined with a
+            // precise reason instead of failing halfway through persistence (which used to
+            // create partial rows and poison the retry path).
+            var validation = EventMessageValidator.validate(message.eventId(), message.eventType(),
+                    message.userId(), message.attributes(), message.occurredAt());
+            if (!validation.valid()) {
+                throw new IllegalArgumentException("schema validation failed: " + String.join("; ", validation.errors()));
+            }
             if (notificationMetrics != null) {
                 notificationMetrics.incrementKafkaConsumed(message.eventType().name());
             }
@@ -105,11 +114,30 @@ public class NotificationEventConsumer {
                     message.occurredAt()
             );
             var notifications = processIncomingEventUseCase.execute(event);
+            int deferred = 0;
+            int digests = 0;
             for (Notification notification : notifications) {
                 // Immediate (non-scheduled) notifications are delivered right away; the
-                // scheduler job handles anything with a future scheduledFor timestamp.
+                // scheduler job handles anything with a future scheduledFor timestamp
+                // (including ATC frequency-capped deferrals).
                 if (notification.getScheduledFor() == null) {
-                    deliverNotificationUseCase.execute(notification);
+                    if (notification.getStatus() == com.uber.notification.domain.model.NotificationStatus.QUEUED_DIGEST) {
+                        digests++;
+                    } else {
+                        deliverNotificationUseCase.execute(notification);
+                    }
+                } else {
+                    deferred++;
+                }
+            }
+            if (notificationMetrics != null) {
+                if (digests > 0) {
+                    notificationMetrics.incrementDigestQueued(message.eventType().name());
+                    notificationMetrics.setPendingDigests(
+                            notificationMetrics.getPendingDigests() + digests);
+                }
+                if (deferred > 0) {
+                    notificationMetrics.incrementFrequencyCapped(message.eventType().name());
                 }
             }
         } catch (Exception e) {
