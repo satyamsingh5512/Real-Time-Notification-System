@@ -34,6 +34,21 @@ public interface NotificationJpaRepository extends JpaRepository<NotificationJpa
 
     long countByStatus(NotificationStatus status);
 
+    @Query("""
+            select count(n) from NotificationJpaEntity n
+            where n.userId = :userId
+              and n.channel = com.uber.notification.domain.model.NotificationChannel.PUSH
+              and n.sentAt >= :since
+            """)
+    long countPushesSentSince(@Param("userId") UUID userId, @Param("since") Instant since);
+
+    @Query("""
+            select max(n.sentAt) from NotificationJpaEntity n
+            where n.userId = :userId
+              and n.channel = com.uber.notification.domain.model.NotificationChannel.PUSH
+            """)
+    Optional<Instant> findLastPushSentAt(@Param("userId") UUID userId);
+
     long countByCreatedAtAfter(Instant since);
 
     long countByReadAtIsNullAndDeletedFalse();
