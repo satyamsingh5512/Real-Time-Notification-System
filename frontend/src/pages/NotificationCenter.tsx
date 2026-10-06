@@ -2,17 +2,18 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { BellOff, Filter, Search } from 'lucide-react';
 import { notificationsApi } from '@/services/api';
 import { normalizeError, type NormalizedError } from '@/services/errors';
-import { useRealtime } from '@/hooks/useRealtime';
+import { useRealtime, toInboxRow } from '@/stores/realtime';
 import { dayLabel } from '@/lib/format';
 import type { NotificationItem } from '@/types/api';
 import { PageHeader } from '@/components/layout/primitives';
+import { useListInsert } from '@/animations/transitions';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { ErrorState } from '@/components/ui/error-state';
 import { Input } from '@/components/ui/input';
-import { Skeleton } from '@/components/ui/skeleton';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { cn } from '@/lib/utils';
+import { NotificationListSkeleton } from '@/components/ui/skeletons';
 import {
   Dialog,
   DialogContent,
@@ -32,7 +33,7 @@ const PAGE_SIZE = 20;
  * in the UI rather than implied to be a global filter).
  */
 export function NotificationCenter() {
-  const { connected, refreshUnread } = useRealtime();
+  const { connected, refreshUnread, live } = useRealtime();
 
   const [items, setItems] = useState<NotificationItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -59,6 +60,21 @@ export function NotificationCenter() {
     void load();
   }, [load]);
 
+  /**
+   * Prepend socket-pushed notifications so the "appear live" claim is true. Only page 0
+   * is spliced — inserting into page 3 would put the newest item on the oldest page.
+   * Rows mapped from the socket are optimistic (see `toInboxRow`); a background refresh
+   * reconciles channel/status/priority from the server.
+   */
+  useEffect(() => {
+    if (page !== 0 || live.length === 0) return;
+    setItems((current) => {
+      const existing = new Set(current.map((item) => item.id));
+      const incoming = live.map(toInboxRow).filter((item) => !existing.has(item.id));
+      return incoming.length === 0 ? current : [...incoming, ...current].slice(0, PAGE_SIZE);
+    });
+  }, [live, page]);
+
   const visible = useMemo(() => {
     const needle = search.trim().toLowerCase();
     return items.filter((item) => {
@@ -68,6 +84,10 @@ export function NotificationCenter() {
       return haystack.includes(needle);
     });
   }, [items, filter, search]);
+
+  /* Spec §21: a notification arriving slides into the list rather than popping.
+     Under reduced motion the row renders in place with no transform. */
+  const listRef = useListInsert<HTMLDivElement>(visible.length);
 
   /** Groups by day so the list reads as a timeline rather than a flat dump. */
   const grouped = useMemo(() => {
@@ -168,16 +188,51 @@ export function NotificationCenter() {
           />
         </div>
 
-        <Tabs value={filter} onValueChange={(value) => setFilter(value as 'all' | 'unread')}>
-          <TabsList aria-label="Filter notifications">
-            <TabsTrigger value="all">
-              All <span className="ml-1 text-xs text-muted-foreground tabular">{items.length}</span>
-            </TabsTrigger>
-            <TabsTrigger value="unread">
-              Unread <span className="ml-1 text-xs text-muted-foreground tabular">{unreadInPage}</span>
-            </TabsTrigger>
-          </TabsList>
-        </Tabs>
+        {/*
+          A filter, not a tab view — Radix `Tabs` without a `TabsContent` panel is
+          semantically wrong (it promises a tabpanel that doesn't exist), so this is a
+          real `radiogroup` with arrow-key navigation.
+        */}
+        <div
+          role="radiogroup"
+          aria-label="Filter notifications"
+          className="flex shrink-0 gap-1 rounded-lg border border-border bg-muted/40 p-1"
+        >
+          {(
+            [
+              { value: 'all' as const, label: 'All', count: items.length },
+              { value: 'unread' as const, label: 'Unread', count: unreadInPage },
+            ]
+          ).map((option) => {
+            const selected = filter === option.value;
+            return (
+              <button
+                key={option.value}
+                type="button"
+                role="radio"
+                aria-checked={selected}
+                tabIndex={selected ? 0 : -1}
+                onClick={() => setFilter(option.value)}
+                onKeyDown={(event) => {
+                  // Roving focus: arrows move between radios, Home/End jump to the ends.
+                  if (event.key !== 'ArrowRight' && event.key !== 'ArrowLeft') return;
+                  event.preventDefault();
+                  setFilter(filter === 'all' ? 'unread' : 'all');
+                }}
+                className={cn(
+                  'rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
+                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                  selected
+                    ? 'bg-background text-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground',
+                )}
+              >
+                {option.label}{' '}
+                <span className="text-xs text-muted-foreground tabular">{option.count}</span>
+              </button>
+            );
+          })}
+        </div>
 
         <Badge variant={connected ? 'success' : 'warning'} className="w-fit">
           {connected ? 'Live' : 'Reconnecting'}
@@ -185,18 +240,7 @@ export function NotificationCenter() {
       </div>
 
       {loading ? (
-        <div className="space-y-3 rounded-xl border border-border bg-card p-4" aria-hidden="true">
-          {Array.from({ length: 6 }).map((_, index) => (
-            <div key={index} className="flex gap-3">
-              <Skeleton className="mt-1 size-2 rounded-full" />
-              <div className="flex-1 space-y-2">
-                <Skeleton className="h-3.5 w-1/2" />
-                <Skeleton className="h-3 w-full" />
-                <Skeleton className="h-2.5 w-1/4" />
-              </div>
-            </div>
-          ))}
-        </div>
+        <NotificationListSkeleton rows={6} label="Loading notifications" />
       ) : items.length === 0 ? (
         <EmptyState
           icon={<BellOff />}
@@ -222,7 +266,7 @@ export function NotificationCenter() {
                 {label}
                 <span className="tabular">({group.length})</span>
               </h2>
-              <div className="overflow-hidden rounded-xl border border-border bg-card">
+              <div className="overflow-hidden rounded-xl border border-border bg-card" ref={listRef}>
                 {group.map((item) => (
                   <NotificationRow
                     key={item.id}
