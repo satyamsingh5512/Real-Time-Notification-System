@@ -24,11 +24,15 @@ public class NotificationMetrics {
 
     private final MeterRegistry meterRegistry;
     private final AtomicInteger activeWebSocketSessions = new AtomicInteger(0);
+    private final AtomicInteger pendingDigestNotifications = new AtomicInteger(0);
 
     public NotificationMetrics(MeterRegistry meterRegistry) {
         this.meterRegistry = meterRegistry;
         Gauge.builder("websocket.sessions.active", activeWebSocketSessions, AtomicInteger::get)
                 .description("Active WebSocket connections on this pod")
+                .register(meterRegistry);
+        Gauge.builder("notifications.digest.pending", pendingDigestNotifications, AtomicInteger::get)
+                .description("Notifications currently batched in pending digests")
                 .register(meterRegistry);
     }
 
@@ -78,6 +82,56 @@ public class NotificationMetrics {
                 .tags("bucket", bucketTopic)
                 .register(meterRegistry)
                 .increment();
+    }
+
+    public void incrementDigestQueued(String eventType) {
+        Counter.builder("notifications.digest.queued.total")
+                .description("Notifications batched into pending digests")
+                .tags("eventType", eventType)
+                .register(meterRegistry);
+    }
+
+    public void incrementDigestFlushed(int itemCount) {
+        Counter.builder("notifications.digest.flushed.total")
+                .description("Digest emails sent")
+                .register(meterRegistry)
+                .increment();
+        Counter.builder("notifications.digest.items.total")
+                .description("Notifications delivered via digests")
+                .register(meterRegistry)
+                .increment(itemCount);
+    }
+
+    public void incrementFrequencyCapped(String eventType) {
+        Counter.builder("notifications.frequency-capped.total")
+                .description("Pushes deferred by ATC frequency caps")
+                .tags("eventType", eventType)
+                .register(meterRegistry)
+                .increment();
+    }
+
+    public void incrementCircuitOpened(String channel) {
+        Counter.builder("provider.circuit-breaker.opens.total")
+                .description("Provider circuit breaker trips")
+                .tags("channel", channel)
+                .register(meterRegistry)
+                .increment();
+    }
+
+    public void incrementRolloutDiverted(String code) {
+        Counter.builder("template.rollout.diverted.total")
+                .description("Renders served with the previous template version during gradual rollout")
+                .tags("code", code)
+                .register(meterRegistry)
+                .increment();
+    }
+
+    public void setPendingDigests(int pending) {
+        pendingDigestNotifications.set(pending);
+    }
+
+    public int getPendingDigests() {
+        return pendingDigestNotifications.get();
     }
 
     // WebSocket gauge helpers — called by WebSocketSessionRegistry.
