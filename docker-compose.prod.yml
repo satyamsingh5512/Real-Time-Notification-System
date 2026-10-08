@@ -1,0 +1,278 @@
+# Production stack for Oracle Cloud Always Free (Ubuntu ARM64 / Ampere, single VM).
+# Externally exposes ONLY 80/443. Postgres/Redis/Kafka live on the internal
+# `internal` network and are never published to the host.
+#
+# Layout on the VM:
+#   /opt/rtns/                — this repo (or image-based compose)
+#   /opt/rtns/backups/        — output of scripts/backup_postgres.sh
+#   /etc/letsencrypt/         — certbot material, mounted read-only into nginx
+#
+# Persistent volumes: postgres_data, redis_data, kafka_data. Kafka MUST be on a volume —
+# it holds the notification backlog and consumer offsets, so without one every
+# `docker compose down && up` silently drops in-flight notifications.
+#
+# Start:
+#   cp .env.example .env   # then set JWT_SECRET (32+ bytes), DB_PASSWORD, etc.
+#   docker compose -f docker-compose.prod.yml up -d --build
+#   scripts/smoke_test.sh http://localhost
+#
+# TLS: nginx terminates TLS directly. Set NGINX_SERVER_NAME, NGINX_TLS_CERT_PATH and
+# NGINX_TLS_KEY_PATH in .env — nginx.prod.conf is a template rendered from them at
+# container start, so there is no hostname to hand-edit in the config. If you prefer to
+# terminate TLS at an OCI Load Balancer instead, use nginx.conf over plain HTTP and drop
+# the 443 port here; see docs/ORACLE_DEPLOYMENT.md.
+
+name: rtns-prod
+
+networks:
+  internal:
+    driver: bridge
+    internal: true
+  edge:
+    driver: bridge
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  kafka_data:
+    driver: local
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: always
+    env_file:
+      - path: .env
+        required: true
+    environment:
+      POSTGRES_DB: ${DB_NAME:?DB_NAME is required (see .env.example)}
+      POSTGRES_USER: ${DB_USER:?DB_USER is required (see .env.example)}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - internal
+    deploy:
+      resources:
+        limits:
+          # CPU budget across the stack is 3.25 of the 4 OCPU Always Free allows.
+          # Oversubscribing does not fail fast — it just throttles, which presents as
+          # unexplained latency. Keep the total under the shape's OCPU count.
+          cpus: "0.75"
+          memory: 1G
+        reservations:
+          memory: 256M
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  redis:
+    image: redis:7-alpine
+    restart: always
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory", "256mb", "--maxmemory-policy", "allkeys-lru"]
+    volumes:
+      - redis_data:/data
+    networks:
+      - internal
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 300M
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  kafka:
+    image: apache/kafka:3.7.0
+    restart: always
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      CLUSTER_ID: MkU3OEVBNTcwNTJENDM2Qk
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_LOG_RETENTION_HOURS: 72
+      # Pin the log dir so the named volume below actually holds the log segments.
+      # Without this the image defaults to /tmp/kraft-combined-logs, which is NOT the
+      # volume mount point — the volume would attach and stay empty, and every redeploy
+      # would silently drop topics, consumer offsets, and the whole in-flight backlog.
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
+    volumes:
+      # Without this, `docker compose down && up` wipes KRaft metadata (topics) and all
+      # committed consumer offsets, so in-flight notifications are lost on every deploy.
+      - kafka_data:/var/lib/kafka/data
+    networks:
+      - internal
+    deploy:
+      resources:
+        limits:
+          cpus: "0.75"
+          memory: 1G
+    # KRaft needs to load a log segment and elect a controller before `--list` answers.
+    # 40s was marginal on Ampere and produced a restart loop on a cold volume.
+    stop_grace_period: 45s
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-topics.sh --bootstrap-server kafka:9092 --list"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 90s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  notification-platform:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: rtns-backend:prod
+    restart: always
+    env_file:
+      - path: .env
+        required: true
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME:?required}
+      DB_USER: ${DB_USER:?required}
+      DB_PASSWORD: ${DB_PASSWORD:?required}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required (32+ random bytes)}
+      JWT_EXPIRATION_MS: ${JWT_EXPIRATION_MS:-3600000}
+      SES_FROM_ADDRESS: ${SES_FROM_ADDRESS:-no-reply@example.com}
+      AWS_REGION: ${AWS_REGION:-us-east-1}
+      # External email service. Off by default; when on it replaces SES as the EMAIL
+      # transport. See docs/EMAIL_SERVICE_INTEGRATION.md.
+      EMAIL_SERVICE_ENABLED: ${EMAIL_SERVICE_ENABLED:-false}
+      EMAIL_SERVICE_URL: ${EMAIL_SERVICE_URL:-http://email-service:3001}
+      EMAIL_SERVICE_API_KEY: ${EMAIL_SERVICE_API_KEY:-}
+      EMAIL_SERVICE_MASS_MAIL_ENABLED: ${EMAIL_SERVICE_MASS_MAIL_ENABLED:-false}
+      EMAIL_SERVICE_MASS_MAIL_MAX_RECIPIENTS: ${EMAIL_SERVICE_MASS_MAIL_MAX_RECIPIENTS:-100}
+      RATE_LIMIT_PER_MINUTE: ${RATE_LIMIT_PER_MINUTE:-300}
+      NOTIFICATION_RETENTION_DAYS: ${NOTIFICATION_RETENTION_DAYS:-90}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    networks:
+      - internal
+      - edge
+    deploy:
+      resources:
+        limits:
+          cpus: "1.25"
+          memory: 1.5G
+        reservations:
+          memory: 512M
+    # Let Tomcat finish in-flight requests and let Kafka consumers commit their
+    # offsets before SIGKILL. Kafka commits are the difference between a clean
+    # redeploy and duplicated notifications after it.
+    stop_grace_period: 40s
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:8080/actuator/health/readiness || exit 1"]
+      interval: 20s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
+
+  nginx:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    depends_on:
+      notification-platform:
+        condition: service_healthy
+    networks:
+      - edge
+    environment:
+      # The official nginx image runs envsubst over /etc/nginx/templates/*.template into
+      # /etc/nginx/conf.d/. NGINX_ENVSUBST_FILTER restricts substitution to variables
+      # starting with `NGINX_`, so nginx's OWN runtime variables ($host, $remote_addr,
+      # $request_uri, log_format fields, ...) are left untouched. Do not remove it —
+      # without it every `$var` in the config is blanked and the server will not start.
+      NGINX_ENVSUBST_FILTER: "NGINX_"
+      NGINX_SERVER_NAME: ${NGINX_SERVER_NAME:?set NGINX_SERVER_NAME in .env}
+      NGINX_TLS_CERT_PATH: ${NGINX_TLS_CERT_PATH:?set NGINX_TLS_CERT_PATH in .env}
+      NGINX_TLS_KEY_PATH: ${NGINX_TLS_KEY_PATH:?set NGINX_TLS_KEY_PATH in .env}
+    volumes:
+      # TLS material. nginx refuses to start if the cert/key are unreadable, which is
+      # intentional — better a loud crash loop than silently serving plaintext.
+      # Use the real certbot path for your hostname (uncomment + edit):
+      #   - /etc/letsencrypt:/etc/letsencrypt:ro
+      # Or point NGINX_TLS_CERT_PATH/KEY_PATH at any other cert location.
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+      # ACME challenge webroot. The `location /.well-known/acme-challenge/` block serves
+      # from /usr/share/nginx/html, which is baked into the image — so without this mount
+      # `certbot certonly --webroot -w ./certroot` writes files the server never reads and
+      # every renewal fails. Host ./certroot == container's challenge directory.
+      - ./certroot:/usr/share/nginx/html/.well-known/acme-challenge:ro
+      # nginx.prod.conf is a TEMPLATE, rendered at container start from NGINX_* vars.
+      # Optional: drop a file here to trust a reverse proxy in front of nginx, e.g.
+      #   echo 'set_real_ip_from 10.0.0.0/24; real_ip_header X-Forwarded-For;' \
+      #     > /opt/rtns/nginx/trusted-proxies.conf
+      # Without it, $remote_addr is the proxy's IP and limit_req buckets every client
+      # together (see docs/ORACLE_DEPLOYMENT.md).
+      - ./nginx/trusted-proxies.conf:/etc/nginx/snippets/trusted-proxies.conf:ro
+      - ./nginx.prod.conf:/etc/nginx/templates/default.conf.template:ro
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 256M
+    # Probes nginx's own liveness location on the plain-HTTP server, which is
+    # deliberately not redirected to HTTPS (otherwise this probe would follow the
+    # 301 with no SNI and permanently mark a healthy container unhealthy).
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
