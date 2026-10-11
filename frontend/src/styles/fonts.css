@@ -1,0 +1,38 @@
+/*
+ * Self-hosted Inter (spec §31: no CDN runtime dependency).
+ *
+ * `--font-sans` declares 'Inter'/'Inter var' but nothing ever loaded it, so every
+ * production render silently fell through to whatever system font the host had —
+ * on the Oracle ARM target that is typically DejaVu Sans, not the typeface the
+ * design system is built around. This file fixes that without a network request.
+ *
+ * Only the `wght` axis and the `latin` subset are bundled: 48 KB instead of the
+ * 1.9 MB that `@fontsource-variable/inter` ships across all five subsets. The
+ * browser only downloads a face it actually needs to render a glyph from, and the
+ * unicode-range below keeps the rest of the world on the system fallback, which is
+ * the correct behaviour for a latin-first product.
+ *
+ * `font-display: swap` means text paints immediately in the fallback face and
+ * reflows once — never a blank page while the font loads.
+ */
+
+@font-face {
+  font-family: 'Inter var';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('@fontsource-variable/inter/files/inter-latin-wght-normal.woff2') format('woff2-variations');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304,
+    U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+/* Static-named alias so `--font-sans: 'Inter var', 'Inter', …` resolves either way. */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('@fontsource-variable/inter/files/inter-latin-wght-normal.woff2') format('woff2-variations');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304,
+    U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
