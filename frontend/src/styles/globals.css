@@ -1,0 +1,425 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+/* Self-hosted Inter — must come before any rule that reads --font-sans. */
+@import './fonts.css';
+
+@custom-variant dark (&:is(.dark *));
+
+/*
+ * Design tokens (shadcn/ui convention + extended motion/radius/shadow scales).
+ * Every component reads these — no hardcoded colors anywhere else in the app.
+ */
+:root {
+  --background: oklch(0.985 0.002 250);
+  --foreground: oklch(0.21 0.01 260);
+
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.21 0.01 260);
+
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.21 0.01 260);
+
+  /* A restrained technical blue: reads as infrastructure, not marketing neon. */
+  --primary: oklch(0.55 0.16 255);
+  --primary-foreground: oklch(0.99 0.002 250);
+
+  --secondary: oklch(0.96 0.005 250);
+  --secondary-foreground: oklch(0.28 0.012 260);
+
+  --muted: oklch(0.965 0.004 250);
+  --muted-foreground: oklch(0.495 0.013 258);
+
+  --accent: oklch(0.95 0.02 255);
+  --accent-foreground: oklch(0.3 0.05 258);
+
+  --destructive: oklch(0.58 0.21 27);
+  --destructive-foreground: oklch(0.99 0 0);
+
+  /*
+   * Semantic colours are split into a *fill* and a *text* role. `--success` is used as
+   * a badge/status fill, where a mid-tone green is correct; but the same value used as
+   * text on a light card measured 2.49:1, which fails AA. `--success-text` is the
+   * darkened variant reserved for foreground use.
+   */
+  --success: oklch(0.62 0.14 155);
+  --success-foreground: oklch(0.99 0 0);
+  --success-text: oklch(0.46 0.14 152);
+  --warning: oklch(0.72 0.15 75);
+  --warning-foreground: oklch(0.24 0.05 75);
+  --warning-text: oklch(0.47 0.13 70);
+  --info: oklch(0.6 0.13 235);
+
+  --border: oklch(0.92 0.005 255);
+  --input: oklch(0.92 0.005 255);
+  --ring: oklch(0.55 0.16 255);
+
+  --sidebar: oklch(0.99 0.001 250);
+  --sidebar-foreground: oklch(0.21 0.01 260);
+  --sidebar-primary: oklch(0.55 0.16 255);
+  --sidebar-primary-foreground: oklch(0.99 0.002 250);
+  --sidebar-accent: oklch(0.96 0.005 250);
+  --sidebar-accent-foreground: oklch(0.28 0.012 260);
+  --sidebar-border: oklch(0.92 0.005 255);
+  --sidebar-ring: oklch(0.55 0.16 255);
+
+  /* Radius scale */
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius: 0.625rem;
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+
+  /* Typography */
+  --font-sans: 'Inter var', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+    'Helvetica Neue', Arial, sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', 'JetBrains Mono', 'Fira Code', Menlo, monospace;
+
+  /* Elevation: low-contrast, layered rather than heavy drop shadows. */
+  --shadow-color: 220 40% 12%;
+  --shadow-xs: 0 1px 2px 0 hsl(var(--shadow-color) / 0.05);
+  --shadow-sm: 0 1px 3px 0 hsl(var(--shadow-color) / 0.08), 0 1px 2px -1px hsl(var(--shadow-color) / 0.06);
+  --shadow-md: 0 4px 12px -2px hsl(var(--shadow-color) / 0.1), 0 2px 4px -2px hsl(var(--shadow-color) / 0.06);
+  --shadow-lg: 0 12px 28px -6px hsl(var(--shadow-color) / 0.12), 0 4px 8px -4px hsl(var(--shadow-color) / 0.06);
+  --shadow-xl: 0 24px 48px -12px hsl(var(--shadow-color) / 0.16);
+
+  /* Motion tokens — short, purposeful, GPU-friendly (translate/opacity only). */
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1);
+  --ease-in-out-soft: cubic-bezier(0.4, 0, 0.2, 1);
+  --duration-instant: 90ms;
+  --duration-fast: 150ms;
+  --duration-normal: 220ms;
+  --duration-slow: 380ms;
+}
+
+.dark {
+  --background: oklch(0.17 0.008 260);
+  --foreground: oklch(0.96 0.002 250);
+
+  --card: oklch(0.21 0.009 260);
+  --card-foreground: oklch(0.96 0.002 250);
+
+  --popover: oklch(0.22 0.009 260);
+  --popover-foreground: oklch(0.96 0.002 250);
+
+  --primary: oklch(0.7 0.14 252);
+  --primary-foreground: oklch(0.16 0.01 260);
+
+  --secondary: oklch(0.27 0.01 260);
+  --secondary-foreground: oklch(0.96 0.002 250);
+
+  --muted: oklch(0.26 0.01 260);
+  --muted-foreground: oklch(0.68 0.012 258);
+
+  --accent: oklch(0.3 0.03 256);
+  --accent-foreground: oklch(0.95 0.01 250);
+
+  --destructive: oklch(0.65 0.19 25);
+  --destructive-foreground: oklch(0.16 0.01 260);
+
+  --success: oklch(0.68 0.14 155);
+  --success-foreground: oklch(0.16 0.01 260);
+  --success-text: oklch(0.8 0.15 152);
+  --warning: oklch(0.8 0.14 80);
+  --warning-foreground: oklch(0.2 0.03 80);
+  --warning-text: oklch(0.86 0.14 82);
+  --info: oklch(0.68 0.12 235);
+
+  --border: oklch(0.3 0.01 260);
+  --input: oklch(0.33 0.012 260);
+  --ring: oklch(0.7 0.14 252);
+
+  --sidebar: oklch(0.19 0.009 260);
+  --sidebar-foreground: oklch(0.96 0.002 250);
+  --sidebar-primary: oklch(0.7 0.14 252);
+  --sidebar-primary-foreground: oklch(0.16 0.01 260);
+  --sidebar-accent: oklch(0.26 0.012 260);
+  --sidebar-accent-foreground: oklch(0.96 0.002 250);
+  --sidebar-border: oklch(0.3 0.01 260);
+  --sidebar-ring: oklch(0.7 0.14 252);
+
+  --shadow-color: 220 60% 2%;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-success-text: var(--success-text);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-warning-text: var(--warning-text);
+  --color-info: var(--info);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
+
+  --radius-sm: var(--radius-sm);
+  --radius-md: var(--radius-md);
+  --radius-lg: var(--radius-lg);
+  --radius-xl: var(--radius-xl);
+
+  --shadow-xs: var(--shadow-xs);
+  --shadow-sm: var(--shadow-sm);
+  --shadow-md: var(--shadow-md);
+  --shadow-lg: var(--shadow-lg);
+  --shadow-xl: var(--shadow-xl);
+
+  --ease-out-expo: var(--ease-out-expo);
+  --ease-out-quart: var(--ease-out-quart);
+
+  --color-hero-fg: var(--hero-fg);
+  --color-hero-fg-muted: var(--hero-fg-muted);
+  --color-hero-border: var(--hero-border);
+  --color-hero-border-strong: var(--hero-border-strong);
+  --color-hero-surface: var(--hero-surface);
+  --color-hero-surface-raised: var(--hero-surface-raised);
+  --color-hero-accent: var(--hero-accent);
+
+  --animate-accordion-down: accordion-down var(--duration-normal) var(--ease-out-quart);
+  --animate-accordion-up: accordion-up var(--duration-normal) var(--ease-out-quart);
+  --animate-shimmer: shimmer 1.6s linear infinite;
+  --animate-pulse-subtle: pulse-subtle 2.4s var(--ease-in-out-soft) infinite;
+}
+
+@keyframes accordion-down {
+  from {
+    height: 0;
+    opacity: 0;
+  }
+  to {
+    height: var(--radix-accordion-content-height);
+    opacity: 1;
+  }
+}
+
+@keyframes accordion-up {
+  from {
+    height: var(--radix-accordion-content-height);
+    opacity: 1;
+  }
+  to {
+    height: 0;
+    opacity: 0;
+  }
+}
+
+@keyframes shimmer {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+
+@keyframes pulse-subtle {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+--motion-tokens-placeholder: 0;
+}
+
+/*
+ * Hero "night band" tokens (spec §9, §10).
+ *
+ * The WebGL shader always renders a deep navy field in *both* themes — it is a dark
+ * band by design, not a light-mode surface. The hero copy therefore cannot use
+ * `--foreground` / `--muted-foreground`: in light mode those are dark ink, which is
+ * effectively invisible over the field.
+ *
+ * These tokens are deliberately theme-invariant. They are declared once in `:root` and
+ * NOT overridden in `.dark`, so the hero is legible regardless of the user's OS theme
+ * and regardless of what frame the shader happens to be drawing. This is the contrast
+ * guarantee that lets the copy sit directly on the canvas with no opaque panel behind it.
+ */
+:root {
+  --hero-fg: oklch(0.98 0.003 250);
+  /* Measured against the darkest part of the scrimmed shader band, this must clear
+     4.5:1 for the 11-12px supporting copy (channel chips, trust row). oklch(0.8)
+     only reached 3.68:1 — too low for text this small. */
+  --hero-fg-muted: oklch(0.89 0.012 250);
+  --hero-border: oklch(1 0 0 / 0.18);
+  --hero-border-strong: oklch(1 0 0 / 0.32);
+  --hero-surface: oklch(1 0 0 / 0.07);
+  --hero-surface-raised: oklch(1 0 0 / 0.12);
+  --hero-accent: oklch(0.82 0.17 152);
+}
+
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+    scroll-behavior: smooth;
+  }
+
+  body {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    font-family: var(--font-sans);
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'ss01';
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Never let a wide table or long token push the page sideways on mobile. */
+  html,
+  body {
+    overflow-x: hidden;
+    max-width: 100%;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-ring);
+    outline-offset: 2px;
+    border-radius: var(--radius-sm);
+  }
+
+  ::selection {
+    background-color: color-mix(in oklab, var(--color-primary) 22%, transparent);
+  }
+
+  /* Themed scrollbars keep the product feeling coherent in dark mode. */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-border) transparent;
+  }
+
+  *::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  *::-webkit-scrollbar-thumb {
+    background-color: var(--color-border);
+    border-radius: 9999px;
+    border: 3px solid transparent;
+    background-clip: content-box;
+  }
+
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+}
+
+@layer utilities {
+  .skip-link {
+    position: absolute;
+    left: -9999px;
+    top: 0;
+    z-index: 100;
+    background: var(--color-primary);
+    color: var(--color-primary-foreground);
+    padding: 0.625rem 1rem;
+    border-bottom-right-radius: var(--radius-md);
+    font-weight: 600;
+  }
+
+  .skip-link:focus {
+    left: 0;
+  }
+
+  /* Subtle grid used behind the hero/feature sections (Aceternity-style, static). */
+  .bg-grid {
+    background-image:
+      linear-gradient(to right, color-mix(in oklab, var(--color-border) 60%, transparent) 1px, transparent 1px),
+      linear-gradient(to bottom, color-mix(in oklab, var(--color-border) 60%, transparent) 1px, transparent 1px);
+    background-size: 56px 56px;
+  }
+
+  .bg-dot {
+    background-image: radial-gradient(
+      color-mix(in oklab, var(--color-foreground) 12%, transparent) 1px,
+      transparent 1px
+    );
+    background-size: 22px 22px;
+  }
+
+  .mask-radial-fade {
+    mask-image: radial-gradient(ellipse 80% 60% at 50% 40%, black 40%, transparent 100%);
+  }
+
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  .text-pretty {
+    text-wrap: pretty;
+  }
+
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Animated border highlight for premium cards (GPU-cheap, transform/opacity only). */
+  .card-hover {
+    transition:
+      transform var(--duration-fast) var(--ease-out-quart),
+      box-shadow var(--duration-fast) var(--ease-out-quart),
+      border-color var(--duration-fast) var(--ease-out-quart);
+  }
+
+  .card-hover:hover {
+    transform: translateY(-2px);
+    border-color: color-mix(in oklab, var(--color-primary) 40%, var(--color-border));
+    box-shadow: var(--shadow-md);
+  }
+}
+
+/*
+ * Reduced motion: accessibility wins over motion. GSAP timelines are skipped in JS
+ * (see src/animations/motion.ts) — this is the CSS safety net for anything that
+ * isn't JS-driven, plus it kills the shader's fallback shimmer.
+ */
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .card-hover:hover {
+    transform: none;
+  }
+}
